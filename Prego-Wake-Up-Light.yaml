@@ -1,12 +1,12 @@
 blueprint:
-  name: Wake up to configurable actions at next alarm
+  name: Prego - Wake up to configurable actions at next alarm v2.1
   description: It wakes you up with configurable actions on your phone's next alarm with a time lag. No need for phone location
   domain: automation
+
   input:
     offset:
       name: Offset
-      description: Set a offset in seconds to the next alarm. When (before) the lights
-        should turn on
+      description: Set a offset in seconds to the next alarm. When (before) the lights should turn on
       selector:
         number:
           min: 0.0
@@ -35,33 +35,33 @@ blueprint:
       default: []
       selector:
         action: {}
+
 variables:
   offset: !input offset
 trigger:
-- platform: time
-  at: !input alarm_helper
-  id: wake_up
-- platform: state
-  entity_id:
-  - !input alarm_source
-  id: helper_update
+  - platform: time
+    at: !input alarm_helper
+    id: wake_up
+  - platform: state
+    entity_id:
+      - !input alarm_source
+    id: helper_update
 action:
-- choose:
-  - conditions:
-    - condition: trigger
-      id: helper_update
-    - condition: template
-      value_template: '{{ trigger.to_state.state not in ["unknown","unavailable"]
-        }}'
-    sequence:
-    - service: input_datetime.set_datetime
-      data:
-        timestamp: '{{ (as_timestamp(trigger.to_state.state) |int ) - (offset)}}'
-      target:
-        entity_id: !input alarm_helper
-  - conditions:
-    - condition: trigger
-      id: wake_up
-    sequence: !input actions
-  default: []
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: helper_update
+          - condition: template
+            value_template: '{{ trigger.to_state.state not in ["unknown","unavailable"] }}'
+        sequence:
+          - service: input_datetime.set_datetime
+            data:
+              timestamp: '{{ (as_timestamp(trigger.to_state.state) |int ) - (offset)}}'
+            target:
+              entity_id: !input alarm_helper
+      - conditions:
+          - condition: trigger
+            id: wake_up
+        sequence: !input actions
+    default: []
 mode: single

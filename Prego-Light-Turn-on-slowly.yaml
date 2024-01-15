@@ -1,6 +1,6 @@
 blueprint:
-  name: Prego2 - Encender Bombilla con Brillo Incremental
-  description: Enciende una bombilla e incrementa gradualmente su brillo hasta llegar al 40%.
+  name: Prego - Turn light on - Bulb with incremental brightness v2.1
+  description: Turn on a light bulb and gradually increase its brightness until it reaches 40%.
   domain: script
   input:
     in_light_entity:
