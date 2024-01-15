@@ -1,0 +1,36 @@
+blueprint:
+  name: Prego2 - Encender Bombilla con Brillo Incremental
+  description: Enciende una bombilla e incrementa gradualmente su brillo hasta llegar al 40%.
+  domain: script
+  input:
+    in_light_entity:
+      name: Entidad de la Bombilla
+      description: La entidad de la bombilla que quieres encender.
+      selector:
+        entity:
+          domain: light
+    in_transition_duration:
+      name: Duración de la Transición
+      description: Duración en segundos para incrementar gradualmente el brillo.
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 600
+          unit_of_measurement: Seconds
+
+sequence:
+  - service: light.turn_on
+    target:
+      entity_id: !input in_light_entity
+    data:
+      brightness_pct: 1
+
+  - repeat:
+      count: 40
+      sequence:
+        - service: light.turn_on
+          target:
+            entity_id: !input in_light_entity
+          data:
+            brightness_step: 1
