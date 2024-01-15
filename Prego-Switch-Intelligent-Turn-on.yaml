@@ -1,0 +1,66 @@
+blueprint:
+  name: Prego - Turn switch on - By Intelligent v1.6
+  description: When detecting movement and verifying that the variables delivered are false. The light turns on
+  domain: automation
+
+  input:
+    in_motion_sensor:
+      name: Motion sensor
+      description: Select the motion sensor for the area to be evaluated.
+      selector:
+        entity:
+          domain: binary_sensor
+    in_away_from_home:
+      name: Are you away from home?
+      description: Entity that defines if you are away from home
+      selector:
+        entity:
+          domain: input_boolean
+    in_stealth_mode:
+      name: Are you in stealth mode?
+      description: entity that defines whether you are in ninja or stealth mode.
+      selector:
+        entity:
+          domain: input_boolean
+    in_entity_switch:
+      name: Switch to control
+      description: Select the switch to control automatically.
+      selector:
+        entity:
+          domain: switch
+    sunrise_offset:
+      name: Offset to turn off lights
+      description: Define offset to sunrise
+      selector:
+        time:
+
+#---------------
+# Automatizacion para enceder la luz al detectar movimiento.
+#---------------
+
+trigger:
+  - platform: state
+    entity_id: !input 'in_motion_sensor'
+    to: 'on'
+  - platform: sun
+    event: sunset
+    offset: !input sunrise_offset
+
+condition:
+  - condition: state
+    entity_id: !input 'in_entity_switch'
+    state: 'off'
+  - condition: sun
+    before: sunrise
+    before_offset: !input sunrise_offset
+  - condition: state
+    entity_id: !input 'in_away_from_home'
+    state: 'off'
+  - condition: state
+    entity_id: !input 'in_stealth_mode'
+    state: 'off'
+
+action:
+  - service: switch.turn_on
+    target:
+      entity_id: !input 'in_entity_switch'
