@@ -1,10 +1,10 @@
 blueprint:
-  name: Prego - Wake up to configurable actions at next alarm v2.1
+  name: Prego - Wake up to configurable actions at next alarm v2.2
   description: It wakes you up with configurable actions on your phone's next alarm with a time lag. No need for phone location
   domain: automation
 
   input:
-    offset:
+    in_offset:
       name: Offset
       description: Set a offset in seconds to the next alarm. When (before) the lights should turn on
       selector:
@@ -14,7 +14,7 @@ blueprint:
           mode: box
           step: 1.0
           unit_of_measurement: Seconds
-    alarm_source:
+    in_alarm_source:
       name: Alarm Source
       description: Select the alarm source
       selector:
@@ -22,14 +22,14 @@ blueprint:
           integration: mobile_app
           device_class: timestamp
           multiple: false
-    alarm_helper:
+    in_alarm_helper:
       name: Alarm Helper
       description: Select the date time helper
       selector:
         entity:
           integration: input_datetime
           multiple: false
-    actions:
+    in_actions:
       name: Actions
       description: Actions to run before alarm goes off
       default: []
@@ -37,14 +37,14 @@ blueprint:
         action: {}
 
 variables:
-  offset: !input offset
+  offset: !input in_offset
 trigger:
   - platform: time
-    at: !input alarm_helper
+    at: !input in_alarm_helper
     id: wake_up
   - platform: state
     entity_id:
-      - !input alarm_source
+      - !input in_alarm_source
     id: helper_update
 action:
   - choose:
@@ -58,10 +58,10 @@ action:
             data:
               timestamp: '{{ (as_timestamp(trigger.to_state.state) |int ) - (offset)}}'
             target:
-              entity_id: !input alarm_helper
+              entity_id: !input in_alarm_helper
       - conditions:
           - condition: trigger
             id: wake_up
-        sequence: !input actions
+        sequence: !input in_actions
     default: []
 mode: single

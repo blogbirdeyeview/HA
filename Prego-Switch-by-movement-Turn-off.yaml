@@ -1,21 +1,15 @@
 blueprint:
-  name: Prego - Turn switch off - By motion detection v3.7
+  name: Prego - Turn switch off - By motion detection v3.8
   description: As time passes the plug goes off
   domain: automation
 
   input:
     in_motion_sensor:
       name: Motion sensor
-      description: Select the motion sensor for the area to be evaluated.
+      description: Choose the motion sensor that covers the designated area for evaluation.
       selector:
         entity:
           domain: binary_sensor
-    in_entity_switch:
-      name: Switch to control
-      description: Select the switch to control automatically.
-      selector:
-        entity:
-          domain: switch
     in_inactivity_timeout:
       name: No Motion Duration
       description: Time in seconds with no motion to trigger
@@ -23,8 +17,14 @@ blueprint:
       selector:
         number:
           min: 1
-          max: 1800
+          max: 900
           unit_of_measurement: seconds
+    in_entity_switch:
+      name: Switch to control
+      description: Choose the switch that you want to control automatically.
+      selector:
+        entity:
+          domain: switch
 
 #---------------
 # Automatizacion para apagar la luz despues de un tiempo sin movimiento.

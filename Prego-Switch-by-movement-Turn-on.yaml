@@ -1,30 +1,30 @@
 blueprint:
-  name: Prego - Turn switch on - By motion detection v2.4
+  name: Prego - Turn switch on - By motion detection v2.5
   description: When detecting movement and verifying that the variables delivered are false. The light turns on
   domain: automation
 
   input:
     in_motion_sensor:
       name: Motion sensor
-      description: Select the motion sensor for the area to be evaluated.
+      description: Choose the motion sensor that covers the designated area for evaluation.
       selector:
         entity:
           domain: binary_sensor
     in_away_from_home:
       name: Are you away from home?
-      description: Entity that defines if you are away from home
+      description: Indicator signaling the absence of occupants at home (travel status).
       selector:
         entity:
           domain: input_boolean
     in_stealth_mode:
       name: Are you in stealth mode?
-      description: entity that defines whether you are in ninja or stealth mode.
+      description: Indicator signaling that you want to be a ninja in the home (everyone sleeping / suspicious noise).
       selector:
         entity:
           domain: input_boolean
     in_entity_switch:
       name: Switch to control
-      description: Select the switch to control automatically.
+      description: Choose the switch that you want to control automatically.
       selector:
         entity:
           domain: switch
