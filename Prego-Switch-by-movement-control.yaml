@@ -1,9 +1,13 @@
 blueprint:
-  name: Prego - Automatic switch - By motion detection v1.0
-  description:
-    When detecting movement - control of a switch  based on motion detection and customizable conditions. The automation includes features such as preventing activation when away from home,
+  name: Prego - Automatic switch - By motion detection v2.9
+  description: >
+    When detecting movement - control of a switch based on motion detection and customizable conditions. The automation includes features such as preventing activation when away from home,
     considering stealth mode.
   domain: automation
+
+  #---------------
+  # input
+  #---------------
 
   input:
     in_motion_sensor:
@@ -18,18 +22,20 @@ blueprint:
       default: 120
       selector:
         number:
-          min: 1
+          min: 0
           max: 600
           unit_of_measurement: seconds
     in_away_from_home:
       name: Are you away from home?
       description: Indicator signaling the absence of occupants at home (travel status).
+      default: ''
       selector:
         entity:
           domain: input_boolean
     in_stealth_mode:
       name: Are you in stealth mode?
       description: Indicator signaling that you want to be a ninja in the home (everyone sleeping / suspicious noise).
+      default: ''
       selector:
         entity:
           domain: input_boolean
@@ -39,6 +45,16 @@ blueprint:
       selector:
         entity:
           domain: switch
+
+#---------------
+# variables
+#---------------
+
+variables:
+  var_away_from_home: !input in_away_from_home
+  var_stealth_mode: !input in_stealth_mode
+  var_bol_away_from_home: "{{ not (states(var_away_from_home) == 'off' or states(var_away_from_home) == 'unknown') }}"
+  var_bol_stealth_mode: "{{ not (states(var_stealth_mode) == 'off' or states(var_stealth_mode) == 'unknown') }}"
 
 #---------------
 # Automatizacion para enceder la luz al detectar movimiento.
@@ -60,22 +76,36 @@ trigger:
 
 condition:
 
+#---------------
+# Actions
+#---------------
+
 action:
+  - service: logbook.log
+    data:
+      message: 'Valor de la VAR var_stealth_mode: {{ states(var_stealth_mode) }}'
+      name: 'var_stealth_mode'
+  - service: logbook.log
+    data:
+      message: 'Valor de la VAR var_bol_stealth_mode: {{ var_bol_stealth_mode }}'
+      name: 'var_bol_stealth_mode'
+  - service: logbook.log
+    data:
+      message: 'Valor de la VAR var_bol_away_from_home: {{ var_bol_away_from_home }}'
+      name: 'var_bol_away_from_home'
   - choose:
       - conditions:
           #---------------
-          # Case 1 - para enceder la luz al detectar movimiento.
+          # Case 1 - To turn on the light when motion is detected.
           #---------------
           - condition: trigger
             id:
               - id_motion_start
-          - condition: state
-            entity_id: !input 'in_away_from_home'
-            state: 'off'
+          - condition: template
+            value_template: '{{ not var_bol_away_from_home }}'
             # In home
-          - condition: state
-            entity_id: !input 'in_stealth_mode'
-            state: 'off'
+          - condition: template
+            value_template: '{{ not var_bol_stealth_mode }}'
             # No ninjas at home
           - condition: state
             entity_id: !input 'in_motion_sensor'
@@ -89,6 +119,10 @@ action:
           - service: switch.turn_on
             target:
               entity_id: !input 'in_entity_switch'
+          - service: logbook.log
+            data:
+              message: 'Case 1: Turn on the switch'
+              name: 'Case RUN'
         alias: Turn on the switch
       - conditions:
           #---------------
@@ -107,5 +141,9 @@ action:
           - service: switch.turn_off
             target:
               entity_id: !input 'in_entity_switch'
+          - service: logbook.log
+            data:
+              message: 'Case 2: Turn off the switch'
+              name: 'Case RUN'
         alias: Turn off the switch
 mode: single

@@ -1,9 +1,13 @@
 blueprint:
-  name: Prego - Automatic light custom - By motion detection & sun v1.2
+  name: Prego - Automatic light custom - By motion detection & sun v1.5
   description:
     When detecting movement - control of a switch  based on motion detection and customizable conditions. The automation includes features such as preventing activation when away from home,
     considering stealth mode, and adjusting to specific time periods.
   domain: automation
+
+  #---------------
+  # input
+  #---------------
 
   input:
     in_motion_sensor:
@@ -24,12 +28,14 @@ blueprint:
     in_away_from_home:
       name: Are you away from home?
       description: Indicator signaling the absence of occupants at home (travel status).
+      default: ''
       selector:
         entity:
           domain: input_boolean
     in_stealth_mode:
       name: Are you in stealth mode?
       description: Indicator signaling that you want to be a ninja in the home (everyone sleeping / suspicious noise).
+      default: ''
       selector:
         entity:
           domain: input_boolean
@@ -61,6 +67,25 @@ blueprint:
         action: {}
 
 #---------------
+# variables
+#---------------
+
+variables:
+  var_away_from_home: !input in_away_from_home
+  var_stealth_mode: !input in_stealth_mode
+  var_bol_away_from_home: "{{ not (states(var_away_from_home) == 'off' or states(var_away_from_home) == 'unknown') }}"
+  var_bol_stealth_mode: "{{ not (states(var_stealth_mode) == 'off' or states(var_stealth_mode) == 'unknown') }}"
+
+#  var_away_from_home: >
+#    {% if states('in_away_from_home') == 'on' %}
+#      on
+#    {% elif states('in_away_from_home') == 'off' %}
+#      off
+#    {% else %}
+#      off
+#    {% endif %}
+
+#---------------
 # Automatizacion para enceder la luz al detectar movimiento.
 #---------------
 
@@ -86,6 +111,10 @@ trigger:
 
 condition:
 
+#---------------
+# Actions
+#---------------
+
 action:
   - choose:
       - conditions:
@@ -96,13 +125,11 @@ action:
             id:
               - id_motion_start
               - id_time_night
-          - condition: state
-            entity_id: !input 'in_away_from_home'
-            state: 'off'
+          - condition: template
+            value_template: '{{ not var_bol_away_from_home }}'
             # In home
-          - condition: state
-            entity_id: !input 'in_stealth_mode'
-            state: 'off'
+          - condition: template
+            value_template: '{{ not var_bol_stealth_mode }}'
             # No ninjas at home
           - condition: state
             entity_id: !input 'in_motion_sensor'
@@ -145,7 +172,7 @@ action:
           #---------------
           - condition: trigger
             id:
-              - in_time_morning
+              - id_time_morning
           - condition: state
             entity_id: !input 'in_entity_switch'
             state: 'on'

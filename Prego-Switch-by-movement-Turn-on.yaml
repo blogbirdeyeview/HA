@@ -1,7 +1,11 @@
 blueprint:
-  name: Prego - Turn switch on - By motion detection v2.5
+  name: Prego - Turn switch on - By motion detection v2.6
   description: When detecting movement and verifying that the variables delivered are false. The light turns on
   domain: automation
+
+  #---------------
+  # input
+  #---------------
 
   input:
     in_motion_sensor:
@@ -48,6 +52,10 @@ condition:
   - condition: state
     entity_id: !input 'in_stealth_mode'
     state: 'off'
+
+#---------------
+# Actions
+#---------------
 
 action:
   - service: switch.turn_on

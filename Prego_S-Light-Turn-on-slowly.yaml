@@ -1,7 +1,12 @@
 blueprint:
-  name: Prego - Turn light on - Bulb with incremental brightness v2.1
+  name: Prego - Turn light on - Bulb with incremental brightness v2.2
   description: Turn on a light bulb and gradually increase its brightness until it reaches 40%.
   domain: script
+
+  #---------------
+  # input
+  #---------------
+
   input:
     in_light_entity:
       name: Entidad de la Bombilla
@@ -18,6 +23,10 @@ blueprint:
           min: 1
           max: 600
           unit_of_measurement: Seconds
+
+#---------------
+# sequences
+#---------------
 
 sequence:
   - service: light.turn_on

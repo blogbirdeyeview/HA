@@ -1,7 +1,11 @@
 blueprint:
-  name: Prego - Turn switch off - By motion detection v3.8
+  name: Prego - Turn switch off - By motion detection v3.9
   description: As time passes the plug goes off
   domain: automation
+
+  #---------------
+  # input
+  #---------------
 
   input:
     in_motion_sensor:
@@ -43,6 +47,10 @@ condition:
   - condition: state
     entity_id: !input 'in_entity_switch'
     state: 'on'
+
+#---------------
+# Actions
+#---------------
 
 action:
   - service: switch.turn_off

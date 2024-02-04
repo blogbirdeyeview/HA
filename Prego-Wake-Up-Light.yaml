@@ -1,7 +1,11 @@
 blueprint:
-  name: Prego - Wake up to configurable actions at next alarm v2.2
+  name: Prego - Wake up to configurable actions at next alarm v2.3
   description: It wakes you up with configurable actions on your phone's next alarm with a time lag. No need for phone location
   domain: automation
+
+  #---------------
+  # input
+  #---------------
 
   input:
     in_offset:
@@ -36,8 +40,13 @@ blueprint:
       selector:
         action: {}
 
+#---------------
+# variables
+#---------------
+
 variables:
   offset: !input in_offset
+
 trigger:
   - platform: time
     at: !input in_alarm_helper
@@ -46,6 +55,11 @@ trigger:
     entity_id:
       - !input in_alarm_source
     id: helper_update
+
+#---------------
+# Actions
+#---------------
+
 action:
   - choose:
       - conditions:
