@@ -1,8 +1,10 @@
+# Basado en Prego-Switch-by-movement-sun
+# 2024-04-20
 blueprint:
-  name: Prego - Automatic switch - By motion detection v2.9
-  description: >
-    When detecting movement - control of a switch based on motion detection and customizable conditions. The automation includes features such as preventing activation when away from home,
-    considering stealth mode.
+  name: Prego - Automatic switch/light custom - By motion detection & sun v1.9
+  description: 
+    Automatic switch/light. Target is to turn on by personalized config and turn off automatically. Light turns on due to motion detection and the lack of sunlight.
+    And optionally if travel mode and stealth mode are deactivated.
   domain: automation
 
   #---------------
@@ -22,7 +24,7 @@ blueprint:
       default: 120
       selector:
         number:
-          min: 0
+          min: 1
           max: 600
           unit_of_measurement: seconds
     in_away_from_home:
@@ -39,12 +41,34 @@ blueprint:
       selector:
         entity:
           domain: input_boolean
-    in_entity_switch:
-      name: Switch to control
-      description: Choose the switch that you want to control automatically.
+    in_time_morning:
+      name: Sunrise Helper
+      description: Choose the time helper corresponding to sunrise.
       selector:
         entity:
-          domain: switch
+          integration: input_datetime
+          multiple: false
+    in_time_night:
+      name: Sunset Helper
+      description: Choose the time helper corresponding to Sunset.
+      selector:
+        entity:
+          integration: input_datetime
+          multiple: false
+    in_target_entity_control:
+      name: Target switch/light to control
+      description: Choose the switch/light that you want to control automatically.
+      selector:
+        entity:
+          domain:
+            - switch
+            - light
+    in_actions_on:
+      name: Actions ON
+      description: Actions to run to Turn on (custom)
+      default: []
+      selector:
+        action: {}
 
 #---------------
 # variables
@@ -73,6 +97,12 @@ trigger:
       hours: 0
       minutes: 0
       seconds: !input 'in_inactivity_timeout'
+  - platform: time
+    id: id_time_morning
+    at: !input 'in_time_morning'
+  - platform: time
+    id: id_time_night
+    at: !input 'in_time_night'
 
 condition:
 
@@ -81,26 +111,15 @@ condition:
 #---------------
 
 action:
-  - service: logbook.log
-    data:
-      message: 'Valor de la VAR var_stealth_mode: {{ states(var_stealth_mode) }}'
-      name: 'var_stealth_mode'
-  - service: logbook.log
-    data:
-      message: 'Valor de la VAR var_bol_stealth_mode: {{ var_bol_stealth_mode }}'
-      name: 'var_bol_stealth_mode'
-  - service: logbook.log
-    data:
-      message: 'Valor de la VAR var_bol_away_from_home: {{ var_bol_away_from_home }}'
-      name: 'var_bol_away_from_home'
   - choose:
       - conditions:
           #---------------
-          # Case 1 - To turn on the light when motion is detected.
+          # Case 1 - para encender la luz al detectar movimiento.
           #---------------
           - condition: trigger
             id:
               - id_motion_start
+              - id_time_night
           - condition: template
             value_template: '{{ not var_bol_away_from_home }}'
             # In home
@@ -112,18 +131,18 @@ action:
             state: 'on'
             # Motion detected
           - condition: state
-            entity_id: !input 'in_entity_switch'
+            entity_id: !input 'in_target_entity_control'
             state: 'off'
-            # switch OFF
-        sequence:
-          - service: switch.turn_on
-            target:
-              entity_id: !input 'in_entity_switch'
-          - service: logbook.log
-            data:
-              message: 'Case 1: Turn on the switch'
-              name: 'Case RUN'
-        alias: Turn on the switch
+            # target OFF
+          - condition: or
+            conditions:
+              - condition: time
+                after: !input 'in_time_night'
+                # After time
+              - condition: time
+                before: !input 'in_time_morning'
+                # Before time
+        sequence: !input in_actions_on
       - conditions:
           #---------------
           # Case 2 - para apagar la luz al terminar movimiento.
@@ -135,15 +154,24 @@ action:
             entity_id: !input 'in_motion_sensor'
             state: 'off'
           - condition: state
-            entity_id: !input 'in_entity_switch'
+            entity_id: !input 'in_target_entity_control'
             state: 'on'
         sequence:
-          - service: switch.turn_off
-            target:
-              entity_id: !input 'in_entity_switch'
-          - service: logbook.log
-            data:
-              message: 'Case 2: Turn off the switch'
-              name: 'Case RUN'
-        alias: Turn off the switch
+          - service: homeassistant.turn_off
+            entity_id: !input 'in_target_entity_control'
+        alias: Turn off the target
+      - conditions:
+          #---------------
+          # Case 3 - para apagar la luz al tener luz de dia.
+          #---------------
+          - condition: trigger
+            id:
+              - in_time_morning
+          - condition: state
+            entity_id: !input 'in_target_entity_control'
+            state: 'on'
+        sequence:
+          - service: homeassistant.turn_off
+            entity_id: !input 'in_target_entity_control'
+        alias: Turn off the target - it's already morning!
 mode: single

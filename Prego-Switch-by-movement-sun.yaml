@@ -1,7 +1,8 @@
+# 2024-04-19
 blueprint:
-  name: Prego - Automatic switch - By motion detection & sun v2.0
+  name: Prego - Automatic switch - By motion detection & sun v2.1
   description:
-    When detecting movement - control of a switch  based on motion detection and customizable conditions. The automation includes features such as preventing activation when away from home,
+    When detecting movement - control of a switch based on motion detection and customizable conditions. The automation includes features such as preventing activation when away from home,
     considering stealth mode, and adjusting to specific time periods.
   domain: automation
 
@@ -53,7 +54,7 @@ blueprint:
         entity:
           integration: input_datetime
           multiple: false
-    in_entity_switch:
+    in_target_entity_control:
       name: Switch to control
       description: Choose the switch that you want to control automatically.
       selector:
@@ -104,7 +105,7 @@ action:
   - choose:
       - conditions:
           #---------------
-          # Case 1 - para enceder la luz al detectar movimiento.
+          # Case 1 - para encender la luz al detectar movimiento.
           #---------------
           - condition: trigger
             id:
@@ -121,7 +122,7 @@ action:
             state: 'on'
             # Motion detected
           - condition: state
-            entity_id: !input 'in_entity_switch'
+            entity_id: !input 'in_target_entity_control'
             state: 'off'
             # switch OFF
           - condition: or
@@ -131,11 +132,10 @@ action:
                 # After time
               - condition: time
                 before: !input 'in_time_morning'
-                # before time
+                # Before time
         sequence:
-          - service: switch.turn_on
-            target:
-              entity_id: !input 'in_entity_switch'
+          - service: homeassistant.turn_on
+            entity_id: !input 'in_target_entity_control'
         alias: Turn on the switch
       - conditions:
           #---------------
@@ -148,12 +148,11 @@ action:
             entity_id: !input 'in_motion_sensor'
             state: 'off'
           - condition: state
-            entity_id: !input 'in_entity_switch'
+            entity_id: !input 'in_target_entity_control'
             state: 'on'
         sequence:
-          - service: switch.turn_off
-            target:
-              entity_id: !input 'in_entity_switch'
+          - service: homeassistant.turn_off
+            entity_id: !input 'in_target_entity_control'
         alias: Turn off the switch
       - conditions:
           #---------------
@@ -163,11 +162,10 @@ action:
             id:
               - in_time_morning
           - condition: state
-            entity_id: !input 'in_entity_switch'
+            entity_id: !input 'in_target_entity_control'
             state: 'on'
         sequence:
-          - service: switch.turn_off
-            target:
-              entity_id: !input 'in_entity_switch'
+          - service: homeassistant.turn_off
+            entity_id: !input 'in_target_entity_control'
         alias: Turn off the switch - it's already morning!
 mode: single

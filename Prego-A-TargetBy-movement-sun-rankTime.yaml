@@ -1,8 +1,11 @@
+# Basado en Prego-Switch-by-movement-sun
+# 2024-04-19
 blueprint:
-  name: Prego - Automatic switch - By motion detection & sun  - rank of time v0.6
-  description:
-    When detecting movement - control of a switch  based on motion detection and customizable conditions. The automation includes features such as preventing activation when away from home,
-    considering stealth mode, and adjusting to specific time periods.
+  name: Prego - Automatic switch/light - By motion detection & sun - rank of time v0.10
+  description: 
+    Automatic switch/light. Target is to turn on due to motion detection and the lack of sunlight.
+    And optionally if travel mode and stealth mode are deactivated.
+    There is a period of time configurated when it does not turn on (sleep time for example).
   domain: automation
 
   #---------------
@@ -55,22 +58,24 @@ blueprint:
           multiple: false
     in_clock_in_time:
       name: Start of period without light time (23:00:00)
-      description: Test is run at configured time
+      description: From what time will this automation work?
       default: '23:00:00'
       selector:
         time: {}
     in_clock_out_time:
       name: End of period without light time (07:00:00)
-      description: Test is run at configured time
+      description: Until what time will this automation work?
       default: '07:00:00'
       selector:
         time: {}
     in_target_entity_control:
-      name: Light to control
-      description: Choose the light that you want to control automatically.
+      name: Target switch/light to control
+      description: Choose the switch/light that you want to control automatically.
       selector:
         entity:
-          domain: light
+          domain:
+            - switch
+            - light
 
 #---------------
 # variables
@@ -135,7 +140,7 @@ action:
           - condition: state
             entity_id: !input 'in_target_entity_control'
             state: 'off'
-            # switch OFF
+            # target OFF
           - condition: or
             conditions:
               - condition: time
@@ -152,7 +157,7 @@ action:
         sequence:
           - service: homeassistant.turn_on
             entity_id: !input 'in_target_entity_control'
-        alias: Turn on the switch
+        alias: Turn on the target
       - conditions:
           #---------------
           # Case 2 - para apagar la luz al terminar movimiento.
@@ -169,7 +174,7 @@ action:
         sequence:
           - service: homeassistant.turn_off
             entity_id: !input 'in_target_entity_control'
-        alias: Turn off the switch
+        alias: Turn off the target
       - conditions:
           #---------------
           # Case 3 - para apagar la luz al tener luz de dia.
@@ -183,5 +188,5 @@ action:
         sequence:
           - service: homeassistant.turn_off
             entity_id: !input 'in_target_entity_control'
-        alias: Turn off the switch - it's already morning!
+        alias: Turn off the target - it's already morning!
 mode: single

@@ -1,11 +1,8 @@
+# 2024-04-19
 blueprint:
-  name: Prego - Turn switch off - By motion detection v3.9
-  description: As time passes the plug goes off
+  name: Prego - Turn off switch/light - By motion detection v3.11
+  description: Automate lights or switches to turn off when no motion is detected for a specified duration in a designated area.
   domain: automation
-
-  #---------------
-  # input
-  #---------------
 
   input:
     in_motion_sensor:
@@ -21,18 +18,17 @@ blueprint:
       selector:
         number:
           min: 1
-          max: 900
+          max: 1200
           unit_of_measurement: seconds
-    in_entity_switch:
-      name: Switch to control
-      description: Choose the switch that you want to control automatically.
+    in_target_entity_control:
+      name: Target switch/light to control
+      description: Choose the switch/light that you want to control automatically.
       selector:
         entity:
-          domain: switch
+          domain:
+            - switch
+            - light
 
-#---------------
-# Automatizacion para apagar la luz despues de un tiempo sin movimiento.
-#---------------
 
 trigger:
   platform: state
@@ -45,14 +41,11 @@ trigger:
 
 condition:
   - condition: state
-    entity_id: !input 'in_entity_switch'
+    entity_id: !input 'in_target_entity_control'
     state: 'on'
 
-#---------------
-# Actions
-#---------------
+
 
 action:
-  - service: switch.turn_off
-    target:
-      entity_id: !input 'in_entity_switch'
+  - service: homeassistant.turn_off
+    entity_id: !input 'in_target_entity_control'

@@ -1,6 +1,7 @@
+# 2024-04-19
 blueprint:
-  name: Prego - Turn switch on - By motion detection v2.6
-  description: When detecting movement and verifying that the variables delivered are false. The light turns on
+  name: Prego - Turn on switch/light - By motion detection v2.8
+  description: Automate lights or switches to turn on based on motion detection, ensuring it only activates when you are home and not in stealth mode.
   domain: automation
 
   #---------------
@@ -17,21 +18,33 @@ blueprint:
     in_away_from_home:
       name: Are you away from home?
       description: Indicator signaling the absence of occupants at home (travel status).
+      default: ''
       selector:
         entity:
           domain: input_boolean
     in_stealth_mode:
       name: Are you in stealth mode?
       description: Indicator signaling that you want to be a ninja in the home (everyone sleeping / suspicious noise).
+      default: ''
       selector:
         entity:
           domain: input_boolean
-    in_entity_switch:
+    in_target_entity_control:
       name: Switch to control
       description: Choose the switch that you want to control automatically.
       selector:
         entity:
           domain: switch
+
+#---------------
+# variables
+#---------------
+
+variables:
+  var_away_from_home: !input in_away_from_home
+  var_stealth_mode: !input in_stealth_mode
+  var_bol_away_from_home: "{{ not (states(var_away_from_home) == 'off' or states(var_away_from_home) == 'unknown') }}"
+  var_bol_stealth_mode: "{{ not (states(var_stealth_mode) == 'off' or states(var_stealth_mode) == 'unknown') }}"
 
 #---------------
 # Automatizacion para enceder la luz al detectar movimiento.
@@ -43,14 +56,14 @@ trigger:
   to: 'on'
 
 condition:
+  - condition: template
+    value_template: '{{ not var_bol_away_from_home }}'
+    # In home
+  - condition: template
+    value_template: '{{ not var_bol_stealth_mode }}'
+    # No ninjas at home
   - condition: state
-    entity_id: !input 'in_entity_switch'
-    state: 'off'
-  - condition: state
-    entity_id: !input 'in_away_from_home'
-    state: 'off'
-  - condition: state
-    entity_id: !input 'in_stealth_mode'
+    entity_id: !input 'in_target_entity_control'
     state: 'off'
 
 #---------------
@@ -58,6 +71,5 @@ condition:
 #---------------
 
 action:
-  - service: switch.turn_on
-    target:
-      entity_id: !input 'in_entity_switch'
+  - service: homeassistant.turn_on
+    entity_id: !input 'in_target_entity_control'
