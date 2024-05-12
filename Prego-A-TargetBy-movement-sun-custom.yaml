@@ -1,7 +1,7 @@
 # Basado en Prego-Switch-by-movement-sun
 # 2024-04-20
 blueprint:
-  name: Prego - Automatic switch/light custom - By motion detection & sun v1.9
+  name: Prego - Automatic switch/light custom - By motion detection & sun v1.10
   description: 
     Automatic switch/light. Target is to turn on by personalized config and turn off automatically. Light turns on due to motion detection and the lack of sunlight.
     And optionally if travel mode and stealth mode are deactivated.
@@ -87,21 +87,21 @@ variables:
 trigger:
   - platform: state
     entity_id: !input 'in_motion_sensor'
-    id: id_motion_start
+    id: trigger_motion_start
     to: 'on'
   - platform: state
     entity_id: !input 'in_motion_sensor'
-    id: id_motion_end
+    id: trigger_motion_end
     to: 'off'
     for:
       hours: 0
       minutes: 0
       seconds: !input 'in_inactivity_timeout'
   - platform: time
-    id: id_time_morning
+    id: trigger_time_morning
     at: !input 'in_time_morning'
   - platform: time
-    id: id_time_night
+    id: trigger_time_night
     at: !input 'in_time_night'
 
 condition:
@@ -118,8 +118,8 @@ action:
           #---------------
           - condition: trigger
             id:
-              - id_motion_start
-              - id_time_night
+              - trigger_motion_start
+              - trigger_time_night
           - condition: template
             value_template: '{{ not var_bol_away_from_home }}'
             # In home
@@ -149,7 +149,7 @@ action:
           #---------------
           - condition: trigger
             id:
-              - id_motion_end
+              - trigger_motion_end
           - condition: state
             entity_id: !input 'in_motion_sensor'
             state: 'off'
@@ -166,7 +166,7 @@ action:
           #---------------
           - condition: trigger
             id:
-              - in_time_morning
+              - trigger_time_morning
           - condition: state
             entity_id: !input 'in_target_entity_control'
             state: 'on'

@@ -1,6 +1,7 @@
+# Deprecado psar a usar --> Prego-A-TargetBy-movement-sun.yaml
 # 2024-04-19
 blueprint:
-  name: Prego - Automatic switch - By motion detection & sun v2.1
+  name: Prego Old - Automatic switch - By motion detection & sun v2.2
   description:
     When detecting movement - control of a switch based on motion detection and customizable conditions. The automation includes features such as preventing activation when away from home,
     considering stealth mode, and adjusting to specific time periods.
