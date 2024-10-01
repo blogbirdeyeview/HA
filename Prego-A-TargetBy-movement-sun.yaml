@@ -1,7 +1,7 @@
-# 2024-04-20
+# 2024-05-12
 blueprint:
-  name: Prego - Automatic switch/light - By motion detection & sun v2.4
-  description: 
+  name: Prego - Automatic switch/light - By motion detection & sun v3.2
+  description:
     Automatic switch/light. Target is to turn on due to motion detection and the lack of sunlight.
     And optionally if travel mode and stealth mode are deactivated.
   domain: automation
@@ -56,12 +56,13 @@ blueprint:
           multiple: false
     in_target_entity_control:
       name: Target switch/light to control
-      description: Choose the switch/light that you want to control automatically.
+      description: Choose the switches/lights that you want to control automatically.
       selector:
         entity:
           domain:
             - switch
             - light
+          multiple: true
 
 #---------------
 # variables
@@ -123,10 +124,6 @@ action:
             entity_id: !input 'in_motion_sensor'
             state: 'on'
             # Motion detected
-          - condition: state
-            entity_id: !input 'in_target_entity_control'
-            state: 'off'
-            # target OFF
           - condition: or
             conditions:
               - condition: time
@@ -137,7 +134,8 @@ action:
                 # Before time
         sequence:
           - service: homeassistant.turn_on
-            entity_id: !input 'in_target_entity_control'
+            target:
+              entity_id: !input 'in_target_entity_control'
         alias: Turn on the target
       - conditions:
           #---------------
@@ -149,12 +147,10 @@ action:
           - condition: state
             entity_id: !input 'in_motion_sensor'
             state: 'off'
-          - condition: state
-            entity_id: !input 'in_target_entity_control'
-            state: 'on'
         sequence:
           - service: homeassistant.turn_off
-            entity_id: !input 'in_target_entity_control'
+            target:
+              entity_id: !input 'in_target_entity_control'
         alias: Turn off the target
       - conditions:
           #---------------
@@ -163,11 +159,9 @@ action:
           - condition: trigger
             id:
               - trigger_time_morning
-          - condition: state
-            entity_id: !input 'in_target_entity_control'
-            state: 'on'
         sequence:
           - service: homeassistant.turn_off
-            entity_id: !input 'in_target_entity_control'
+            target:
+              entity_id: !input 'in_target_entity_control'
         alias: Turn off the target - it's already morning!
 mode: single
