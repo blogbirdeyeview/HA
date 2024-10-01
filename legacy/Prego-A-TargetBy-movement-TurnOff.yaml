@@ -1,6 +1,7 @@
+# Deprecado psar a usar --> Prego-A-TargetBy-1movement.yaml
 # 2024-04-19
 blueprint:
-  name: Prego - Turn off switch/light - By motion detection v3.11
+  name: Prego Old - Turn off switch/light - By motion detection v3.12
   description: Automate lights or switches to turn off when no motion is detected for a specified duration in a designated area.
   domain: automation
 
