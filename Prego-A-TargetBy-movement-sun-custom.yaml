@@ -47,14 +47,12 @@ blueprint:
       selector:
         entity:
           integration: input_datetime
-          multiple: false
     in_time_night:
       name: Sunset Helper
       description: Choose the time helper corresponding to Sunset.
       selector:
         entity:
           integration: input_datetime
-          multiple: false
     in_target_entity_control:
       name: Target switch/light to control
       description: Choose the switches/lights that you want to control automatically.
