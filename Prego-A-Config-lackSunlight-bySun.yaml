@@ -1,7 +1,7 @@
 # 2024-10-06
 blueprint:
-  name: Prego - Config Lack of sunlight - By sun prego v0.3
-  description: >
+  name: Prego - Config Lack of sunlight - By sun prego v0.4
+  description:
     Config - defines the boolean for the lack of light, guided by the sunrise and sunset settings -- lack of sunlight.
     The automation includes optionally features such as preventing activation when away from home and considering stealth mode.
   domain: automation
@@ -14,14 +14,12 @@ blueprint:
     in_away_from_home:
       name: Are you away from home?
       description: Indicator signaling the absence of occupants at home (travel status).
-      default: ''
       selector:
         entity:
           domain: input_boolean
     in_stealth_mode:
       name: Are you in stealth mode?
       description: Indicator signaling that you want to be a ninja in the home (everyone sleeping / suspicious noise).
-      default: ''
       selector:
         entity:
           domain: input_boolean
@@ -31,85 +29,89 @@ blueprint:
       selector:
         entity:
           integration: input_datetime
-          multiple: false
     in_time_night:
       name: Sunset Helper
-      description: Choose the time helper corresponding to Sunset.
+      description: Choose the time helper corresponding to sunset.
       selector:
         entity:
           integration: input_datetime
-          multiple: false
     in_target_entity_control:
-      name: Property to reflect the need for light
-      description: Boolean defining Lack of sunlight.
+      name: Lack of Sunlight Indicator
+      description: Boolean that reflects the lack of sunlight.
       selector:
         entity:
           domain: input_boolean
 
-  #---------------
-  # triggers
-  #---------------
+#---------------
+# triggers
+#---------------
 
-  trigger:
-    - platform: time
-      at:
-        - !input in_time_night
-        - !input in_time_morning
-    - platform: state
-      entity_id: !input in_away_from_home
-    - platform: state
-      entity_id: !input in_stealth_mode
+trigger:
+  - platform: time
+    at: !input in_time_morning
+    id: trigger_time_morning
+  - platform: time
+    at: !input in_time_night
+    id: trigger_time_night
+  - platform: state
+    entity_id:
+      - !input in_away_from_home
+      - !input in_stealth_mode
+    id: trigger_state_config
 
-  #---------------
-  # conditions
-  #---------------
+#---------------
+# conditions
+#---------------
+condition: []
 
-  condition: []
+#---------------
+# actions
+#---------------
+action:
+  - choose:
+      - conditions:
+          - condition: time
+            after: !input in_time_night
+            before: !input in_time_morning
+          - condition: state
+            entity_id: !input in_away_from_home
+            state: 'off'
+          - condition: state
+            entity_id: !input in_stealth_mode
+            state: 'off'
+        sequence:
+          - service: input_boolean.turn_on
+            target:
+              entity_id: !input in_target_entity_control
 
-  #---------------
-  # actions
-  #---------------
+      - conditions:
+          - condition: trigger
+            id: trigger_state_config
+          - condition: time
+            after: !input in_time_night
+            before: !input in_time_morning
+          - condition: or
+            conditions:
+              - condition: state
+                entity_id: !input in_away_from_home
+                state: 'on'
+              - condition: state
+                entity_id: !input in_stealth_mode
+                state: 'on'
+        sequence:
+          - service: input_boolean.turn_off
+            target:
+              entity_id: !input in_target_entity_control
 
-  action:
-    - choose:
-        # Condición cuando está oscuro y no se está en "away from home" ni en "stealth mode"
-        - conditions:
-            - condition: time
-              after: !input in_time_night
-              before: !input in_time_morning
-            - condition: state
-              entity_id: !input in_away_from_home
-              state: 'off'
-            - condition: state
-              entity_id: !input in_stealth_mode
-              state: 'off'
-          sequence:
-            - service: input_boolean.turn_on
-              target:
-                entity_id: !input in_target_entity_control
+      - conditions:
+          - condition: trigger
+            id: trigger_time_morning
+        sequence:
+          - service: input_boolean.turn_off
+            target:
+              entity_id: !input in_target_entity_control
 
-        # Condición cuando está oscuro pero se está en "away from home" o "stealth mode"
-        - conditions:
-            - condition: or
-              conditions:
-                - condition: state
-                  entity_id: !input in_away_from_home
-                  state: 'on'
-                - condition: state
-                  entity_id: !input in_stealth_mode
-                  state: 'on'
-          sequence:
-            - service: input_boolean.turn_off
-              target:
-                entity_id: !input in_target_entity_control
-
-    # Acción predeterminada: apaga el booleano si no hay condiciones activas
-    - service: input_boolean.turn_off
-      target:
-        entity_id: !input in_target_entity_control
-
-  #---------------
-  # mode
-  #---------------
-
-  mode: single
+#---------------
+# mode
+#---------------
+mode: single
