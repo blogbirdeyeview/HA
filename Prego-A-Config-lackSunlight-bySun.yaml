@@ -1,6 +1,6 @@
 # 2024-10-06
 blueprint:
-  name: Prego - Config Lack of sunlight - By sun prego v0.4
+  name: Prego - Config Lack of sunlight - By sun prego v0.6
   description:
     Config - defines the boolean for the lack of light, guided by the sunrise and sunset settings -- lack of sunlight.
     The automation includes optionally features such as preventing activation when away from home and considering stealth mode.
@@ -62,14 +62,37 @@ trigger:
 #---------------
 # conditions
 #---------------
-condition: []
+
+condition:
+  - condition: or
+    conditions:
+      - condition: and
+        conditions:
+          - condition: trigger
+            id: trigger_time_morning
+          - condition: state
+            entity_id: !input in_target_entity_control
+            state: 'on'
+        alias: morning
+      - condition: and
+        conditions:
+          - condition: trigger
+            id: trigger_time_night
+          - condition: state
+            entity_id: !input in_target_entity_control
+            state: 'off'
+      - condition: trigger
+        id: trigger_state_config
 
 #---------------
 # actions
 #---------------
+
 action:
   - choose:
       - conditions:
+          - condition: trigger
+            id: trigger_time_night
           - condition: time
             after: !input in_time_night
             before: !input in_time_morning
@@ -86,32 +109,34 @@ action:
 
       - conditions:
           - condition: trigger
-            id: trigger_state_config
-          - condition: time
-            after: !input in_time_night
-            before: !input in_time_morning
-          - condition: or
-            conditions:
-              - condition: state
-                entity_id: !input in_away_from_home
-                state: 'on'
-              - condition: state
-                entity_id: !input in_stealth_mode
-                state: 'on'
-        sequence:
-          - service: input_boolean.turn_off
-            target:
-              entity_id: !input in_target_entity_control
-
-      - conditions:
-          - condition: trigger
             id: trigger_time_morning
         sequence:
           - service: input_boolean.turn_off
             target:
               entity_id: !input in_target_entity_control
 
+      - conditions:
+          - condition: time
+            after: !input in_time_night
+            before: !input in_time_morning
+          - condition: state
+            entity_id: !input in_away_from_home
+            state: 'off'
+          - condition: state
+            entity_id: !input in_stealth_mode
+            state: 'off'
+        sequence:
+          - service: input_boolean.turn_on
+            target:
+              entity_id: !input in_target_entity_control
+
+    default:
+      - service: input_boolean.turn_off
+        target:
+          entity_id: !input in_target_entity_control
+
 #---------------
 # mode
 #---------------
+
 mode: single
