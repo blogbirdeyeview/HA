@@ -1,6 +1,6 @@
 # 2024-10-06
 blueprint:
-  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.1
+  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.2
   description: Adjust sunrise and sunset times based on cloud cover.
   domain: automation
 
@@ -88,18 +88,22 @@ blueprint:
   condition: []
 
   #---------------
+  # variables
+  #---------------
+
+variables:
+  var_cloud_cover: "{{ states('!input in_cloud_cover') | float }}"
+  var_base_offset_morning_minutes: !input in_base_offset_morning_minutes
+  var_extra_cloud_time: !input in_extra_cloud_time
+  var_base_offset_afternoon_minutes: !input in_base_offset_afternoon_minutes
+  var_sunrise_time: "{{ state_attr('sun.sun', 'next_rising') }}"
+  var_sunset_time: "{{ state_attr('sun.sun', 'next_setting') }}"
+
+  #---------------
   # actions
   #---------------
 
   action:
-    - variables:
-        var_cloud_cover: "{{ states('!input in_cloud_cover') | float }}"
-        var_base_offset_morning_minutes: !input in_base_offset_morning_minutes
-        var_extra_cloud_time: !input in_extra_cloud_time
-        var_base_offset_afternoon_minutes: !input in_base_offset_afternoon_minutes
-        var_sunrise_time: "{{ state_attr('sun.sun', 'next_rising') }}"
-        var_sunset_time: "{{ state_attr('sun.sun', 'next_setting') }}"
-
     - service: input_datetime.set_datetime
       target:
         entity_id: !input in_time_morning
