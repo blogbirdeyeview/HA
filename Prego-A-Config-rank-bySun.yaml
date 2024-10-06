@@ -1,7 +1,13 @@
 # 2024-10-06
 blueprint:
   name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.4
-  description: Adjust sunrise and sunset times based on cloud cover.
+  description: >
+    # 🔆 Config rank of sunlight
+    **Version: 0.4**
+    Adjust sunrise and sunset times based on cloud cover.
+
+    Required = *
+
   domain: automation
 
   #---------------
@@ -10,13 +16,13 @@ blueprint:
 
   input:
     in_time_morning:
-      name: Sunrise Helper
+      name: Sunrise Helper *
       description: Choose the time helper corresponding to sunrise.
       selector:
         entity:
           domain: input_datetime
     in_time_night:
-      name: Sunset Helper
+      name: Sunset Helper *
       description: Choose the time helper corresponding to sunset.
       selector:
         entity:
