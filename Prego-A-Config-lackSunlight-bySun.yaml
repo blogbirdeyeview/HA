@@ -1,9 +1,8 @@
-# Basado en Prego-A-TargetBy-movement-sun-rankTime.yaml
-# 2024-10-06
+# 2024-10-01
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & sun - rank of time v1.0
+  name: Prego - Automatic switches/lights - By motion detection & sun v3.7
   description:
-    Automatic switches/lights. Allows the automation of the control of lights or switches based on detected movement, based and the lack of sunlight and specific schedules (sleep time for example).
+    Automatic switches/lights. Allows you to automatically control the target based on motion detection and the lack of sunlight.
     The automation includes optionally features such as preventing activation when away from home and considering stealth mode.
   domain: automation
 
@@ -55,18 +54,6 @@ blueprint:
         entity:
           integration: input_datetime
           multiple: false
-    in_clock_in_time:
-      name: Start of period without light time (23:00:00)
-      description: From what time will this automation work?
-      default: '23:00:00'
-      selector:
-        time: {}
-    in_clock_out_time:
-      name: End of period without light time (07:00:00)
-      description: Until what time will this automation work?
-      default: '07:00:00'
-      selector:
-        time: {}
     in_target_entity_control:
       name: Target switch/light to control
       description: Choose the switches/lights that you want to control automatically.
@@ -165,12 +152,6 @@ action:
               - condition: time
                 before: !input 'in_time_morning'
                 # Before time
-          # EXTRA solo en rango de tiempo
-          - condition: not
-            conditions:
-              - condition: time
-                after: !input 'in_clock_in_time'
-                before: !input 'in_clock_out_time'
         sequence:
           - service: homeassistant.turn_on
             target:
