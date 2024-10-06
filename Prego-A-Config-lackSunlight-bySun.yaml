@@ -1,7 +1,7 @@
 # 2024-10-06
 blueprint:
-  name: Prego - Config Lack of sunlight - By sun prego v0.2
-  description:
+  name: Prego - Config Lack of sunlight - By sun prego v0.3
+  description: >
     Config - defines the boolean for the lack of light, guided by the sunrise and sunset settings -- lack of sunlight.
     The automation includes optionally features such as preventing activation when away from home and considering stealth mode.
   domain: automation
@@ -44,96 +44,72 @@ blueprint:
       description: Boolean defining Lack of sunlight.
       selector:
         entity:
-          domain:
-            input_boolean
+          domain: input_boolean
 
-#---------------
-# variables
-#---------------
+  #---------------
+  # triggers
+  #---------------
 
-variables:
-  var_away_from_home: !input in_away_from_home
-  var_stealth_mode: !input in_stealth_mode
-  var_target_entities: !input in_target_entity_control
-  var_bol_away_from_home: "{{ not (states(var_away_from_home) == 'off' or states(var_away_from_home) == 'unknown') }}"
-  var_bol_stealth_mode: "{{ not (states(var_stealth_mode) == 'off' or states(var_stealth_mode) == 'unknown') }}"
+  trigger:
+    - platform: time
+      at:
+        - !input in_time_night
+        - !input in_time_morning
+    - platform: state
+      entity_id: !input in_away_from_home
+    - platform: state
+      entity_id: !input in_stealth_mode
 
-#---------------
-# Automatizacion para enceder la luz al detectar movimiento.
-#---------------
+  #---------------
+  # conditions
+  #---------------
 
-trigger:
-  - platform: time
-    id: trigger_time_morning
-    at: !input 'in_time_morning'
-  - platform: time
-    id: trigger_time_night
-    at: !input 'in_time_night'
-  - platform: state
-    entity_id: !input 'in_away_from_home'
-    id: trigger_state_away_on
-    to: 'on'
+  condition: []
 
-#---------------
-# conditions
-#---------------
+  #---------------
+  # actions
+  #---------------
 
-condition:
+  action:
+    - choose:
+        # Condición cuando está oscuro y no se está en "away from home" ni en "stealth mode"
+        - conditions:
+            - condition: time
+              after: !input in_time_night
+              before: !input in_time_morning
+            - condition: state
+              entity_id: !input in_away_from_home
+              state: 'off'
+            - condition: state
+              entity_id: !input in_stealth_mode
+              state: 'off'
+          sequence:
+            - service: input_boolean.turn_on
+              target:
+                entity_id: !input in_target_entity_control
 
-#---------------
-# Actions
-#---------------
+        # Condición cuando está oscuro pero se está en "away from home" o "stealth mode"
+        - conditions:
+            - condition: or
+              conditions:
+                - condition: state
+                  entity_id: !input in_away_from_home
+                  state: 'on'
+                - condition: state
+                  entity_id: !input in_stealth_mode
+                  state: 'on'
+          sequence:
+            - service: input_boolean.turn_off
+              target:
+                entity_id: !input in_target_entity_control
 
-action:
-  - choose:
-      - conditions:
-          #---------------
-          # Case 1 - To turn ON the light when motion is detected.
-          #---------------
-          - condition: trigger
-            id:
-              - trigger_time_night
-          - condition: template
-            value_template: '{{ not var_bol_away_from_home }}'
-            # In home
-          - condition: template
-            value_template: '{{ not var_bol_stealth_mode }}'
-            # No ninjas at home
-          - condition: or
-            conditions:
-              - condition: time
-                after: !input 'in_time_night'
-                # After time
-              - condition: time
-                before: !input 'in_time_morning'
-                # Before time
-        sequence:
-          - service: homeassistant.turn_on
-            target:
-              entity_id: !input 'in_target_entity_control'
-        alias: Turn on the target
-      - conditions:
-          #---------------
-          # Case 2 - To turn OFF the light when movement is finished.
-          #---------------
-          - condition: trigger
-            id:
-              - trigger_state_away_on
-        sequence:
-          - service: homeassistant.turn_off
-            target:
-              entity_id: !input 'in_target_entity_control'
-        alias: Turn off the target
-      - conditions:
-          #---------------
-          # Case 3 - To turn OFF the light when there is daylight.
-          #---------------
-          - condition: trigger
-            id:
-              - trigger_time_morning
-        sequence:
-          - service: homeassistant.turn_off
-            target:
-              entity_id: !input 'in_target_entity_control'
-        alias: Turn off the target - it's already morning!
-mode: single
+    # Acción predeterminada: apaga el booleano si no hay condiciones activas
+    - service: input_boolean.turn_off
+      target:
+        entity_id: !input in_target_entity_control
+
+  #---------------
+  # mode
+  #---------------
+
+  mode: single
