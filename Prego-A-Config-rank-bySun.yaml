@@ -1,9 +1,9 @@
 # 2024-10-06
 blueprint:
-  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.4
+  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.5
   description: >
     # 🔆 Config rank of sunlight
-    **Version: 0.4**
+    **Version: 0.5**
     Adjust sunrise and sunset times based on cloud cover.
 
     Required = *
