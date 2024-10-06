@@ -1,8 +1,8 @@
 # 2024-10-06
 blueprint:
-  name: Prego - Config Lack of sunlight - By sun prego v0.1
+  name: Prego - Config Lack of sunlight - By sun prego v0.2
   description:
-    Automatic switches/lights. Allows you to automatically control the target based on motion detection and the lack of sunlight.
+    Config - defines the boolean for the lack of light, guided by the sunrise and sunset settings -- lack of sunlight.
     The automation includes optionally features such as preventing activation when away from home and considering stealth mode.
   domain: automation
 
@@ -45,7 +45,7 @@ blueprint:
       selector:
         entity:
           domain:
-            - boolean
+            input_boolean
 
 #---------------
 # variables
