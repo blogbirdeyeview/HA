@@ -1,9 +1,8 @@
 # 2024-10-06
 blueprint:
-  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.6
+  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.7
   description: >
     # 🔆 Config rank of sunlight
-    **Version: 0.6**
     Adjust sunrise and sunset times based on cloud cover.
 
     Required = *
@@ -63,77 +62,57 @@ blueprint:
 
   #---------------
   # triggers
-  #---------------
+#---------------
 
-  trigger:
-    - platform: time
-      at: '05:30:00'
-    - platform: sun
-      event: sunrise
-      offset: '-03:00:00'
-    - platform: sun
-      event: sunrise
-      offset: '-01:30:00'
-    - platform: time
-      at: !input in_time_morning
-    - platform: time
-      at: '16:30:00'
-    - platform: sun
-      event: sunset
-      offset: '-03:00:00'
-    - platform: sun
-      event: sunset
-      offset: '-01:30:00'
-    - platform: time
-      at: !input in_time_night
+trigger:
+  - platform: time
+    at: !input in_time_morning
+  - platform: sun
+    event: sunrise
+  - platform: time
+    at: !input in_time_night
+  - platform: sun
+    event: sunset
 
-  #---------------
-  # actions
-  #---------------
+action:
+  - variables:
+      var_cloud_cover: "{{ states('!input in_cloud_cover') | float }}"
+      var_extra_cloud_time: !input in_extra_cloud_time
+      var_base_offset_morning_minutes: !input in_base_offset_morning_minutes
+      var_base_offset_afternoon_minutes: !input in_base_offset_afternoon_minutes
+      var_sunrise_time: "{{ state_attr('sun.sun', 'next_rising') }}"
+      var_sunset_time: "{{ state_attr('sun.sun', 'next_setting') }}"
 
-  action:
-    - service: input_datetime.set_datetime
-      target:
-        entity_id: !input in_time_morning
-      data:
-        datetime: >-
-          {% set tiempo_offset = ( !input in_base_offset_morning_minutes * 60 ) %}
-          {{ (as_timestamp(state_attr('sun.sun', 'next_rising')) + tiempo_offset) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
-      alias: Change the time of sunrise
+  - service: input_datetime.set_datetime
+    data:
+      entity_id: !input in_time_morning
+      datetime: >
+        {% set tiempo_offset = var_base_offset_morning_minutes * 60 %}
+        {{ (as_timestamp(var_sunrise_time) + tiempo_offset) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
 
-    - service: input_datetime.set_datetime
-      target:
-        entity_id: !input in_time_night
-      data:
-        datetime: >-
-          {% set tiempo_offset = ( !input in_base_offset_afternoon_minutes * 60 ) %}
-          {{ (as_timestamp(state_attr('sun.sun', 'next_setting')) - tiempo_offset) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
-      alias: Change the sunset time
+  - service: input_datetime.set_datetime
+    data:
+      entity_id: !input in_time_night
+      datetime: >
+        {% set tiempo_offset = var_base_offset_afternoon_minutes * 60 %}
+        {{ (as_timestamp(var_sunset_time) - tiempo_offset) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
 
-    - service: input_datetime.set_datetime
-      target:
-        entity_id: !input in_time_morning
-      data:
-        datetime: >-
-          {% set base_time = as_timestamp(states(!input in_time_morning)) %}
-          {% set offset_minutes = 1 + (!input in_extra_cloud_time * (states(!input in_cloud_cover) | float / 100)) %}
-          {% set cloud_adjustment = offset_minutes * 60 %}
-          {{ (base_time + cloud_adjustment) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
-      alias: Change the sunrise time - by Cloud %
+  - service: input_datetime.set_datetime
+    data:
+      entity_id: !input in_time_morning
+      datetime: >
+        {% set base_time = as_timestamp(states('!input in_time_morning')) %}
+        {% set offset_minutes = 1 + (var_extra_cloud_time * (var_cloud_cover / 100)) %}
+        {% set cloud_adjustment = offset_minutes * 60 %}
+        {{ (base_time + cloud_adjustment) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
 
-    - service: input_datetime.set_datetime
-      target:
-        entity_id: !input in_time_night
-      data:
-        datetime: >-
-          {% set base_time = as_timestamp(states(!input in_time_night)) %}
-          {% set offset_minutes = 1 + (!input in_extra_cloud_time * (states(!input in_cloud_cover) | float / 100)) %}
-          {% set cloud_adjustment = offset_minutes * 60 %}
-          {{ (base_time - cloud_adjustment) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
-      alias: Change the sunset time - by Cloud %
+  - service: input_datetime.set_datetime
+    data:
+      entity_id: !input in_time_night
+      datetime: >
+        {% set base_time = as_timestamp(states('!input in_time_night')) %}
+        {% set offset_minutes = 1 + (var_extra_cloud_time * (var_cloud_cover / 100)) %}
+        {% set cloud_adjustment = offset_minutes * 60 %}
+        {{ (base_time - cloud_adjustment) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
 
-  #---------------
-  # mode
-  #---------------
-
-  mode: single
+mode: single
