@@ -1,6 +1,6 @@
 # 2024-10-06
 blueprint:
-  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.10
+  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.11
   description: >
     # 🔆 Config rank of sunlight
     Adjust sunrise and sunset times based on cloud cover.
@@ -78,6 +78,8 @@ trigger:
 # variables
 #---------------
 variables:
+  var_sensor_time_morning: !input in_time_morning
+  var_sensor_time_night: !input in_time_night
   var_sensor_cloud_cover: !input in_cloud_cover
   var_cloud_cover: "{{ states(var_sensor_cloud_cover) | float }}"
   var_extra_cloud_time: !input in_extra_cloud_time
@@ -105,7 +107,7 @@ action:
     data:
       entity_id: !input in_time_morning
       datetime: >
-        {% set base_time = as_timestamp(states('!input in_time_morning')) %}
+        {% set base_time = as_timestamp(states(var_sensor_time_morning)) %}
         {% set offset_minutes = 1 + (var_extra_cloud_time * (var_cloud_cover / 100)) %}
         {% set cloud_adjustment = offset_minutes * 60 %}
         {{ (base_time + cloud_adjustment) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
@@ -114,7 +116,7 @@ action:
     data:
       entity_id: !input in_time_night
       datetime: >
-        {% set base_time = as_timestamp(states('!input in_time_night')) %}
+        {% set base_time = as_timestamp(states(var_sensor_time_night)) %}
         {% set offset_minutes = 1 + (var_extra_cloud_time * (var_cloud_cover / 100)) %}
         {% set cloud_adjustment = offset_minutes * 60 %}
         {{ (base_time - cloud_adjustment) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
