@@ -1,6 +1,6 @@
 # 2024-10-06
 blueprint:
-  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.7
+  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.8
   description: >
     # 🔆 Config rank of sunlight
     Adjust sunrise and sunset times based on cloud cover.
@@ -27,7 +27,7 @@ blueprint:
         entity:
           domain: input_datetime
     in_cloud_cover:
-      name: Cloud Cover Sensor
+      name: Cloud Cover Sensor *
       description: Sensor that indicates cloud cover in percentage.
       selector:
         entity:
@@ -74,15 +74,18 @@ trigger:
   - platform: sun
     event: sunset
 
-action:
-  - variables:
-      var_cloud_cover: "{{ states('!input in_cloud_cover') | float }}"
-      var_extra_cloud_time: !input in_extra_cloud_time
-      var_base_offset_morning_minutes: !input in_base_offset_morning_minutes
-      var_base_offset_afternoon_minutes: !input in_base_offset_afternoon_minutes
-      var_sunrise_time: "{{ state_attr('sun.sun', 'next_rising') }}"
-      var_sunset_time: "{{ state_attr('sun.sun', 'next_setting') }}"
+#---------------
+# variables
+#---------------
+variables:
+  var_cloud_cover: "{{ states('!input in_cloud_cover') | float }}"
+  var_extra_cloud_time: !input in_extra_cloud_time
+  var_base_offset_morning_minutes: !input in_base_offset_morning_minutes
+  var_base_offset_afternoon_minutes: !input in_base_offset_afternoon_minutes
+  var_sunrise_time: "{{ state_attr('sun.sun', 'next_rising') }}"
+  var_sunset_time: "{{ state_attr('sun.sun', 'next_setting') }}"
 
+action:
   - service: input_datetime.set_datetime
     data:
       entity_id: !input in_time_morning
