@@ -1,6 +1,6 @@
 # 2024-10-06
 blueprint:
-  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.14
+  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.15
   description: >
     # 🔆 Config rank of sunlight
 
@@ -70,15 +70,15 @@ trigger:
     at: "05:30:00"
   - platform: sun
     event: sunrise
-  - platform: time
     offset: "-00:30:00"
+  - platform: time
     at: !input in_time_morning
   - at: "16:30:00"
     trigger: time
   - platform: sun
     event: sunset
-  - platform: time
     offset: "-00:30:00"
+  - platform: time
     at: !input in_time_night
 
 
