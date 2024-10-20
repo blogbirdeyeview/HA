@@ -1,6 +1,7 @@
+# Deprecado psar a usar --> Prego-A-TargetBy-1movement.yaml
 # 2024-04-19
 blueprint:
-  name: Prego - Turn on switch/light - By motion detection v2.8
+  name: Prego Old - Turn on switch/light - By motion detection v2.9
   description: Automate lights or switches to turn on based on motion detection, ensuring it only activates when you are home and not in stealth mode.
   domain: automation
 

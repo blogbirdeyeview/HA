@@ -1,9 +1,10 @@
-# 2024-04-19
+# Deprecado psar a usar --> Prego-A-TargetBy-1movement.yaml
+# 2024-10-01
 blueprint:
-  name: Prego - Automatic switch/light - By motion detection v2.14
+  name: Prego Old - Automatic switches/lights - By motion detection v2.16
   description:
-    When detecting movement - control of a switch/light based on motion detection and customizable conditions. The automation includes features such as preventing activation when away from home,
-    considering stealth mode.
+    Automatic switches/lights. When detecting movement - control of a switch/light based on motion detection and customizable conditions.
+    The automation includes optionally features such as preventing activation when away from home and considering stealth mode.
   domain: automation
 
   #---------------
@@ -23,7 +24,7 @@ blueprint:
       default: 120
       selector:
         number:
-          min: 0
+          min: 1
           max: 600
           unit_of_measurement: seconds
     in_away_from_home:
@@ -42,12 +43,13 @@ blueprint:
           domain: input_boolean
     in_target_entity_control:
       name: Target switch/light to control
-      description: Choose the switch/light that you want to control automatically.
+      description: Choose the switches/lights that you want to control automatically.
       selector:
         entity:
           domain:
             - switch
             - light
+          multiple: true
 
 #---------------
 # variables
@@ -56,6 +58,7 @@ blueprint:
 variables:
   var_away_from_home: !input in_away_from_home
   var_stealth_mode: !input in_stealth_mode
+  var_target_entities: !input in_target_entity_control
   var_bol_away_from_home: "{{ not (states(var_away_from_home) == 'off' or states(var_away_from_home) == 'unknown') }}"
   var_bol_stealth_mode: "{{ not (states(var_stealth_mode) == 'off' or states(var_stealth_mode) == 'unknown') }}"
 
@@ -77,29 +80,44 @@ trigger:
       minutes: 0
       seconds: !input 'in_inactivity_timeout'
 
+#---------------
+# conditions
+#---------------
+
 condition:
+  - condition: template
+    # Verifica si al menos una luz está apagada (lista para encender)
+    # Verifica si al menos una luz está encendida (lista para apagar)
+    value_template: >
+      {{
+      (trigger.id == 'trigger_motion_start' and
+      expand(var_target_entities) | selectattr('state', 'eq', 'off') | list | length > 0) 
+      or
+      (trigger.id == 'trigger_motion_end' and
+      expand(var_target_entities) | selectattr('state', 'eq', 'on') | list | length > 0) 
+      }}
 
 #---------------
 # Actions
 #---------------
 
 action:
-  - service: logbook.log
-    data:
-      message: 'Valor de la VAR var_stealth_mode: {{ states(var_stealth_mode) }}'
-      name: 'var_stealth_mode'
-  - service: logbook.log
-    data:
-      message: 'Valor de la VAR var_bol_stealth_mode: {{ var_bol_stealth_mode }}'
-      name: 'var_bol_stealth_mode'
-  - service: logbook.log
-    data:
-      message: 'Valor de la VAR var_bol_away_from_home: {{ var_bol_away_from_home }}'
-      name: 'var_bol_away_from_home'
+  #  - service: logbook.log
+  #    data:
+  #      message: 'Valor de la VAR var_stealth_mode: {{ states(var_stealth_mode) }}'
+  #      name: 'var_stealth_mode'
+  #  - service: logbook.log
+  #    data:
+  #      message: 'Valor de la VAR var_bol_stealth_mode: {{ var_bol_stealth_mode }}'
+  #      name: 'var_bol_stealth_mode'
+  #  - service: logbook.log
+  #    data:
+  #      message: 'Valor de la VAR var_bol_away_from_home: {{ var_bol_away_from_home }}'
+  #      name: 'var_bol_away_from_home'
   - choose:
       - conditions:
           #---------------
-          # Case 1 - To turn on the light when motion is detected.
+          # Case 1 - To turn ON the light when motion is detected.
           #---------------
           - condition: trigger
             id:
@@ -114,21 +132,19 @@ action:
             entity_id: !input 'in_motion_sensor'
             state: 'on'
             # Motion detected
-          - condition: state
-            entity_id: !input 'in_target_entity_control'
-            state: 'off'
-            # switch/light OFF
         sequence:
           - service: homeassistant.turn_on
-            entity_id: !input 'in_target_entity_control'
+            target:
+              entity_id: !input 'in_target_entity_control'
+          # LOG
           - service: logbook.log
             data:
               message: 'Case 1: Turn on the switch/light'
               name: 'Case RUN'
-        alias: Turn on the switch/light
+        alias: Turn on the target
       - conditions:
           #---------------
-          # Case 2 - para apagar la luz al terminar movimiento.
+          # Case 2 - To turn OFF the light when movement is finished.
           #---------------
           - condition: trigger
             id:
@@ -136,15 +152,14 @@ action:
           - condition: state
             entity_id: !input 'in_motion_sensor'
             state: 'off'
-          - condition: state
-            entity_id: !input 'in_target_entity_control'
-            state: 'on'
         sequence:
           - service: homeassistant.turn_off
-            entity_id: !input 'in_target_entity_control'
+            target:
+              entity_id: !input 'in_target_entity_control'
+          # LOG
           - service: logbook.log
             data:
               message: 'Case 2: Turn off the switch/light'
               name: 'Case RUN'
-        alias: Turn off the switch/light
+        alias: Turn off the target
 mode: single

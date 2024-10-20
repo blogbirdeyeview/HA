@@ -1,8 +1,8 @@
 # 2024-10-01
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & sun v3.7
+  name: Prego - Automatic switches/lights - By motion detection v2.15
   description:
-    Automatic switches/lights. Allows you to automatically control the target based on motion detection and the lack of sunlight.
+    Automatic switches/lights. When detecting movement - control of a switch/light based on motion detection and customizable conditions.
     The automation includes optionally features such as preventing activation when away from home and considering stealth mode.
   domain: automation
 
@@ -40,20 +40,6 @@ blueprint:
       selector:
         entity:
           domain: input_boolean
-    in_time_morning:
-      name: Sunrise Helper
-      description: Choose the time helper corresponding to sunrise.
-      selector:
-        entity:
-          integration: input_datetime
-          multiple: false
-    in_time_night:
-      name: Sunset Helper
-      description: Choose the time helper corresponding to Sunset.
-      selector:
-        entity:
-          integration: input_datetime
-          multiple: false
     in_target_entity_control:
       name: Target switch/light to control
       description: Choose the switches/lights that you want to control automatically.
@@ -92,12 +78,6 @@ trigger:
       hours: 0
       minutes: 0
       seconds: !input 'in_inactivity_timeout'
-  - platform: time
-    id: trigger_time_morning
-    at: !input 'in_time_morning'
-  - platform: time
-    id: trigger_time_night
-    at: !input 'in_time_night'
 
 #---------------
 # conditions
@@ -114,10 +94,6 @@ condition:
       or
       (trigger.id == 'trigger_motion_end' and
       expand(var_target_entities) | selectattr('state', 'eq', 'on') | list | length > 0) 
-      or
-      trigger.id == 'trigger_time_morning'
-      or
-      trigger.id == 'trigger_time_night'
       }}
 
 #---------------
@@ -125,6 +101,18 @@ condition:
 #---------------
 
 action:
+  #  - service: logbook.log
+  #    data:
+  #      message: 'Valor de la VAR var_stealth_mode: {{ states(var_stealth_mode) }}'
+  #      name: 'var_stealth_mode'
+  #  - service: logbook.log
+  #    data:
+  #      message: 'Valor de la VAR var_bol_stealth_mode: {{ var_bol_stealth_mode }}'
+  #      name: 'var_bol_stealth_mode'
+  #  - service: logbook.log
+  #    data:
+  #      message: 'Valor de la VAR var_bol_away_from_home: {{ var_bol_away_from_home }}'
+  #      name: 'var_bol_away_from_home'
   - choose:
       - conditions:
           #---------------
@@ -133,7 +121,6 @@ action:
           - condition: trigger
             id:
               - trigger_motion_start
-              - trigger_time_night
           - condition: template
             value_template: '{{ not var_bol_away_from_home }}'
             # In home
@@ -144,18 +131,15 @@ action:
             entity_id: !input 'in_motion_sensor'
             state: 'on'
             # Motion detected
-          - condition: or
-            conditions:
-              - condition: time
-                after: !input 'in_time_night'
-                # After time
-              - condition: time
-                before: !input 'in_time_morning'
-                # Before time
         sequence:
           - service: homeassistant.turn_on
             target:
               entity_id: !input 'in_target_entity_control'
+          # LOG
+          - service: logbook.log
+            data:
+              message: 'Case 1: Turn on the switch/light'
+              name: 'Case RUN'
         alias: Turn on the target
       - conditions:
           #---------------
@@ -171,17 +155,10 @@ action:
           - service: homeassistant.turn_off
             target:
               entity_id: !input 'in_target_entity_control'
+          # LOG
+          - service: logbook.log
+            data:
+              message: 'Case 2: Turn off the switch/light'
+              name: 'Case RUN'
         alias: Turn off the target
-      - conditions:
-          #---------------
-          # Case 3 - para apagar la luz al tener luz de dia.
-          #---------------
-          - condition: trigger
-            id:
-              - trigger_time_morning
-        sequence:
-          - service: homeassistant.turn_off
-            target:
-              entity_id: !input 'in_target_entity_control'
-        alias: Turn off the target - it's already morning!
 mode: single

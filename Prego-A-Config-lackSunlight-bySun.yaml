@@ -1,0 +1,142 @@
+# 2024-10-06
+blueprint:
+  name: Prego - Config Lack of sunlight - By sun prego v0.6
+  description:
+    Config - defines the boolean for the lack of light, guided by the sunrise and sunset settings -- lack of sunlight.
+    The automation includes optionally features such as preventing activation when away from home and considering stealth mode.
+  domain: automation
+
+  #---------------
+  # input
+  #---------------
+
+  input:
+    in_away_from_home:
+      name: Are you away from home?
+      description: Indicator signaling the absence of occupants at home (travel status).
+      selector:
+        entity:
+          domain: input_boolean
+    in_stealth_mode:
+      name: Are you in stealth mode?
+      description: Indicator signaling that you want to be a ninja in the home (everyone sleeping / suspicious noise).
+      selector:
+        entity:
+          domain: input_boolean
+    in_time_morning:
+      name: Sunrise Helper
+      description: Choose the time helper corresponding to sunrise.
+      selector:
+        entity:
+          integration: input_datetime
+    in_time_night:
+      name: Sunset Helper
+      description: Choose the time helper corresponding to sunset.
+      selector:
+        entity:
+          integration: input_datetime
+    in_target_entity_control:
+      name: Lack of Sunlight Indicator
+      description: Boolean that reflects the lack of sunlight.
+      selector:
+        entity:
+          domain: input_boolean
+
+#---------------
+# triggers
+#---------------
+
+trigger:
+  - platform: time
+    at: !input in_time_morning
+    id: trigger_time_morning
+  - platform: time
+    at: !input in_time_night
+    id: trigger_time_night
+  - platform: state
+    entity_id:
+      - !input in_away_from_home
+      - !input in_stealth_mode
+    id: trigger_state_config
+
+#---------------
+# conditions
+#---------------
+
+condition:
+  - condition: or
+    conditions:
+      - condition: and
+        conditions:
+          - condition: trigger
+            id: trigger_time_morning
+          - condition: state
+            entity_id: !input in_target_entity_control
+            state: 'on'
+        alias: morning
+      - condition: and
+        conditions:
+          - condition: trigger
+            id: trigger_time_night
+          - condition: state
+            entity_id: !input in_target_entity_control
+            state: 'off'
+      - condition: trigger
+        id: trigger_state_config
+
+#---------------
+# actions
+#---------------
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: trigger_time_night
+          - condition: time
+            after: !input in_time_night
+            before: !input in_time_morning
+          - condition: state
+            entity_id: !input in_away_from_home
+            state: 'off'
+          - condition: state
+            entity_id: !input in_stealth_mode
+            state: 'off'
+        sequence:
+          - service: input_boolean.turn_on
+            target:
+              entity_id: !input in_target_entity_control
+
+      - conditions:
+          - condition: trigger
+            id: trigger_time_morning
+        sequence:
+          - service: input_boolean.turn_off
+            target:
+              entity_id: !input in_target_entity_control
+
+      - conditions:
+          - condition: time
+            after: !input in_time_night
+            before: !input in_time_morning
+          - condition: state
+            entity_id: !input in_away_from_home
+            state: 'off'
+          - condition: state
+            entity_id: !input in_stealth_mode
+            state: 'off'
+        sequence:
+          - service: input_boolean.turn_on
+            target:
+              entity_id: !input in_target_entity_control
+
+    default:
+      - service: input_boolean.turn_off
+        target:
+          entity_id: !input in_target_entity_control
+
+#---------------
+# mode
+#---------------
+
+mode: single

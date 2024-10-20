@@ -1,0 +1,132 @@
+# 2024-10-06
+blueprint:
+  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.15
+  description: >
+    # 🔆 Config rank of sunlight
+
+    Adjust sunrise and sunset times based on cloud cover.
+
+    Required = *
+
+  domain: automation
+
+  #---------------
+  # input
+  #---------------
+
+  input:
+    in_time_morning:
+      name: Sunrise Helper *
+      description: Choose the time helper corresponding to sunrise.
+      selector:
+        entity:
+          domain: input_datetime
+    in_time_night:
+      name: Sunset Helper *
+      description: Choose the time helper corresponding to sunset.
+      selector:
+        entity:
+          domain: input_datetime
+    in_cloud_cover:
+      name: Cloud Cover Sensor *
+      description: Sensor that indicates cloud cover in percentage.
+      selector:
+        entity:
+          domain: sensor
+    in_extra_cloud_time:
+      name: Extra Time for Cloud Cover
+      description: The additional time in minutes due to cloud cover.
+      default: 150
+      selector:
+        number:
+          min: 0
+          max: 300
+          unit_of_measurement: 'min'
+    in_base_offset_morning_minutes:
+      name: Base Offset for Morning
+      description: Base offset in minutes to sunrise.
+      default: 20
+      selector:
+        number:
+          min: 0
+          max: 120
+          unit_of_measurement: 'min'
+    in_base_offset_afternoon_minutes:
+      name: Base Offset for Afternoon
+      description: Base offset in minutes to sunset.
+      default: 50
+      selector:
+        number:
+          min: 0
+          max: 120
+          unit_of_measurement: 'min'
+
+  #---------------
+  # triggers
+#---------------
+
+trigger:
+  - platform: time
+    at: "05:30:00"
+  - platform: sun
+    event: sunrise
+    offset: "-00:30:00"
+  - platform: time
+    at: !input in_time_morning
+  - at: "16:30:00"
+    trigger: time
+  - platform: sun
+    event: sunset
+    offset: "-00:30:00"
+  - platform: time
+    at: !input in_time_night
+
+
+#---------------
+# variables
+#---------------
+variables:
+  var_sensor_time_morning: !input in_time_morning
+  var_sensor_time_night: !input in_time_night
+  var_sensor_cloud_cover: !input in_cloud_cover
+  var_cloud_cover: "{{ states(var_sensor_cloud_cover) | float }}"
+  var_extra_cloud_time: !input in_extra_cloud_time
+  var_base_offset_morning_minutes: !input in_base_offset_morning_minutes
+  var_base_offset_afternoon_minutes: !input in_base_offset_afternoon_minutes
+  var_sunrise_time: "{{ state_attr('sun.sun', 'next_rising') }}"
+  var_sunset_time: "{{ state_attr('sun.sun', 'next_setting') }}"
+
+action:
+  - service: input_datetime.set_datetime
+    data:
+      entity_id: !input in_time_morning
+      datetime: >
+        {% set tiempo_offset = var_base_offset_morning_minutes * 60 %}
+        {{ (as_timestamp(var_sunrise_time) + tiempo_offset) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
+
+  - service: input_datetime.set_datetime
+    data:
+      entity_id: !input in_time_night
+      datetime: >
+        {% set tiempo_offset = var_base_offset_afternoon_minutes * 60 %}
+        {{ (as_timestamp(var_sunset_time) - tiempo_offset) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
+
+  - service: input_datetime.set_datetime
+    data:
+      entity_id: !input in_time_morning
+      datetime: >
+        {% set base_time = as_timestamp(strptime(states(var_sensor_time_morning), '%H:%M:%S')) %}
+        {% set offset_minutes = 1 + (var_extra_cloud_time * (var_cloud_cover / 100)) %}
+        {% set cloud_adjustment = offset_minutes * 60 %}
+        {{ (base_time + cloud_adjustment) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
+
+  - service: input_datetime.set_datetime
+    data:
+      entity_id: !input in_time_night
+      datetime: >
+        {% set base_time = as_timestamp(strptime(states(var_sensor_time_night), '%H:%M:%S')) %}
+        {% set offset_minutes = 1 + (var_extra_cloud_time * (var_cloud_cover / 100)) %}
+        {% set cloud_adjustment = offset_minutes * 60 %}
+        {{ (base_time - cloud_adjustment) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
+
+mode: single

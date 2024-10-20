@@ -1,10 +1,10 @@
-# Basado en Prego-Switch-by-movement-sun
-# 2024-04-20
+# Basado en Prego-A-TargetBy-movement-sun
+# 2024-10-01
 blueprint:
-  name: Prego - Automatic switch/light custom - By motion detection & sun v1.10
-  description: 
-    Automatic switch/light. Target is to turn on by personalized config and turn off automatically. Light turns on due to motion detection and the lack of sunlight.
-    And optionally if travel mode and stealth mode are deactivated.
+  name: Prego - Automatic switches/lights custom - By motion detection & sun v1.12
+  description:
+    Automatic switches/lights. Allows you to automatically (custom light switch on by script) control the target based on motion detection and the lack of sunlight.
+    The automation includes optionally features such as preventing activation when away from home and considering stealth mode.
   domain: automation
 
   #---------------
@@ -47,25 +47,24 @@ blueprint:
       selector:
         entity:
           integration: input_datetime
-          multiple: false
     in_time_night:
       name: Sunset Helper
       description: Choose the time helper corresponding to Sunset.
       selector:
         entity:
           integration: input_datetime
-          multiple: false
     in_target_entity_control:
       name: Target switch/light to control
-      description: Choose the switch/light that you want to control automatically.
+      description: Choose the switches/lights that you want to control automatically.
       selector:
         entity:
           domain:
             - switch
             - light
+          multiple: true
     in_actions_on:
       name: Actions ON
-      description: Actions to run to Turn on (custom)
+      description: Actions to run to Turn ON (custom)
       default: []
       selector:
         action: {}
@@ -77,6 +76,7 @@ blueprint:
 variables:
   var_away_from_home: !input in_away_from_home
   var_stealth_mode: !input in_stealth_mode
+  var_target_entities: !input in_target_entity_control
   var_bol_away_from_home: "{{ not (states(var_away_from_home) == 'off' or states(var_away_from_home) == 'unknown') }}"
   var_bol_stealth_mode: "{{ not (states(var_stealth_mode) == 'off' or states(var_stealth_mode) == 'unknown') }}"
 
@@ -104,7 +104,26 @@ trigger:
     id: trigger_time_night
     at: !input 'in_time_night'
 
+#---------------
+# conditions
+#---------------
+
 condition:
+  - condition: template
+    # Verifica si al menos una luz está apagada (lista para encender)
+    # Verifica si al menos una luz está encendida (lista para apagar)
+    value_template: >
+      {{
+      (trigger.id == 'trigger_motion_start' and
+      expand(var_target_entities) | selectattr('state', 'eq', 'off') | list | length > 0) 
+      or
+      (trigger.id == 'trigger_motion_end' and
+      expand(var_target_entities) | selectattr('state', 'eq', 'on') | list | length > 0) 
+      or
+      trigger.id == 'trigger_time_morning'
+      or
+      trigger.id == 'trigger_time_night'
+      }}
 
 #---------------
 # Actions
@@ -114,7 +133,7 @@ action:
   - choose:
       - conditions:
           #---------------
-          # Case 1 - para encender la luz al detectar movimiento.
+          # Case 1 - To turn ON the light when motion is detected.
           #---------------
           - condition: trigger
             id:
@@ -130,10 +149,6 @@ action:
             entity_id: !input 'in_motion_sensor'
             state: 'on'
             # Motion detected
-          - condition: state
-            entity_id: !input 'in_target_entity_control'
-            state: 'off'
-            # target OFF
           - condition: or
             conditions:
               - condition: time
@@ -142,10 +157,11 @@ action:
               - condition: time
                 before: !input 'in_time_morning'
                 # Before time
+        # CUSTOM para turn ON
         sequence: !input in_actions_on
       - conditions:
           #---------------
-          # Case 2 - para apagar la luz al terminar movimiento.
+          # Case 2 - To turn OFF the light when movement is finished.
           #---------------
           - condition: trigger
             id:
@@ -153,12 +169,10 @@ action:
           - condition: state
             entity_id: !input 'in_motion_sensor'
             state: 'off'
-          - condition: state
-            entity_id: !input 'in_target_entity_control'
-            state: 'on'
         sequence:
           - service: homeassistant.turn_off
-            entity_id: !input 'in_target_entity_control'
+            target:
+              entity_id: !input 'in_target_entity_control'
         alias: Turn off the target
       - conditions:
           #---------------
@@ -167,11 +181,9 @@ action:
           - condition: trigger
             id:
               - trigger_time_morning
-          - condition: state
-            entity_id: !input 'in_target_entity_control'
-            state: 'on'
         sequence:
           - service: homeassistant.turn_off
-            entity_id: !input 'in_target_entity_control'
+            target:
+              entity_id: !input 'in_target_entity_control'
         alias: Turn off the target - it's already morning!
 mode: single
