@@ -1,6 +1,6 @@
 # 2024-10-06
 blueprint:
-  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.18
+  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.19
   description: >
     # 🔆 Config rank of sunlight
 
@@ -36,15 +36,9 @@ blueprint:
     in_additional_triggers:
       name: Additional triggers
       description: Setting up custom triggers
+      default: []
       selector:
-        action:
-          # Aquí podrías usar los tipos de trigger que quieras soportar
-          trigger:
-            - time
-            - sun
-            - state
-            - template
-            - numeric_state
+        trigger: {}
     in_extra_cloud_time:
       name: Extra Time for Cloud Cover
       description: The additional time in minutes due to cloud cover.
