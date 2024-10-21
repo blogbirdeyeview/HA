@@ -1,6 +1,6 @@
 # 2024-10-06
 blueprint:
-  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.20
+  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.21
   description: >
     # 🔆 Config rank of sunlight
 
@@ -73,21 +73,25 @@ blueprint:
 
 trigger:
   - platform: time
-    at: "04:30:00"
+    at: '04:30:00'
   - platform: sun
     event: sunrise
-    offset: "-01:30:00"
+    offset: '-01:30:00'
   - platform: time
     at: !input in_time_morning
   - trigger: time
-    at: "15:30:00"
+    at: '15:30:00'
   - platform: sun
     event: sunset
-    offset: "-01:30:00"
+    offset: '-01:30:00'
   - platform: time
     at: !input in_time_night
-  # Triggers adicionales definidos por el usuario
-  - !input in_additional_triggers
+  - variables:
+      triggers: !input in_additional_triggers
+    repeat:
+      for_each: '{{ triggers }}'
+      sequence:
+        - trigger: '{{ repeat.item }}'
 
 #---------------
 # variables
@@ -96,7 +100,7 @@ variables:
   var_sensor_time_morning: !input in_time_morning
   var_sensor_time_night: !input in_time_night
   var_sensor_cloud_cover: !input in_cloud_cover
-  var_cloud_cover: "{{ states(var_sensor_cloud_cover) | float }}"
+  var_cloud_cover: '{{ states(var_sensor_cloud_cover) | float }}'
   var_extra_cloud_time: !input in_extra_cloud_time
   var_base_offset_morning_minutes: !input in_base_offset_morning_minutes
   var_base_offset_afternoon_minutes: !input in_base_offset_afternoon_minutes
