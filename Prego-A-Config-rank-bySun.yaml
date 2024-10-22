@@ -1,6 +1,6 @@
 # 2024-10-06
 blueprint:
-  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.15
+  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.25
   description: >
     # 🔆 Config rank of sunlight
 
@@ -61,26 +61,50 @@ blueprint:
           max: 120
           unit_of_measurement: 'min'
 
-  #---------------
-  # triggers
+#---------------
+# triggers
 #---------------
 
 trigger:
   - platform: time
-    at: "05:30:00"
+    at: '02:30:00'
   - platform: sun
     event: sunrise
-    offset: "-00:30:00"
+    offset: '-03:00:00'
+  - platform: sun
+    event: sunrise
+    offset: '-01:30:00'
+  - platform: sun
+    event: sunrise
+    offset: '-00:30:00'
   - platform: time
     at: !input in_time_morning
-  - at: "16:30:00"
-    trigger: time
+  - trigger: time
+    at: '14:30:00'
   - platform: sun
     event: sunset
-    offset: "-00:30:00"
+    offset: '-03:00:00'
+  - platform: sun
+    event: sunset
+    offset: '-01:30:00'
+  - platform: sun
+    event: sunset
+    offset: '-00:30:00'
   - platform: time
     at: !input in_time_night
-
+  - platform: numeric_state
+    entity_id: !input in_cloud_cover
+    above: 45
+    below: 55
+  - platform: numeric_state
+    entity_id: !input in_cloud_cover
+    above: 50
+  - platform: numeric_state
+    entity_id: !input in_cloud_cover
+    above: 75
+  - platform: numeric_state
+    entity_id: !input in_cloud_cover
+    above: 90
 
 #---------------
 # variables
@@ -89,12 +113,16 @@ variables:
   var_sensor_time_morning: !input in_time_morning
   var_sensor_time_night: !input in_time_night
   var_sensor_cloud_cover: !input in_cloud_cover
-  var_cloud_cover: "{{ states(var_sensor_cloud_cover) | float }}"
+  var_cloud_cover: '{{ states(var_sensor_cloud_cover) | float }}'
   var_extra_cloud_time: !input in_extra_cloud_time
   var_base_offset_morning_minutes: !input in_base_offset_morning_minutes
   var_base_offset_afternoon_minutes: !input in_base_offset_afternoon_minutes
   var_sunrise_time: "{{ state_attr('sun.sun', 'next_rising') }}"
   var_sunset_time: "{{ state_attr('sun.sun', 'next_setting') }}"
+
+#---------------
+# actions
+#---------------
 
 action:
   - service: input_datetime.set_datetime
