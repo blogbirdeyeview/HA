@@ -1,0 +1,121 @@
+# 2024-12-09
+blueprint:
+  name: Prego - Automatic Termo - By Time and Person v0.2
+  description: >
+    # 🔆 Config electric water heater switch
+
+  domain: automation
+
+  #---------------
+  # input
+  #---------------
+
+  input:
+    in_away_from_home:
+      name: Are you away from home?
+      description: Indicator signaling the absence of occupants at home (travel status).
+      default: ''
+      selector:
+        entity:
+          domain: input_boolean
+    in_target_entity_control:
+      name: Electric water heater switch
+      description: Electric water heater switch entity
+      selector:
+        entity:
+          domain: switch
+
+#---------------
+# triggers
+#---------------
+
+trigger:
+  - platform: time
+    at: '00:10:00'
+    id: off_M
+  - platform: time
+    at: '03:00:00'
+    id: on_M_1
+  - platform: time
+    at: '04:30:00'
+    id: off_M_1
+  - platform: time
+    at: '06:45:00'
+    id: on_M_2
+  - platform: time
+    at: '09:00:00'
+    id: off_M_2
+  - platform: time
+    at: '14:30:00'
+    id: on_M_3
+  - platform: time
+    at: '15:30:00'
+    id: off_M_3
+  - platform: time
+    at: '18:30:00'
+    id: on_M_4
+  - platform: time
+    at: '19:00:00'
+    id: off_M_4
+
+#---------------
+# variables
+#---------------
+
+variables:
+  var_away_from_home: !input in_away_from_home
+  var_target_entities: !input in_target_entity_control
+  var_bol_away_from_home: "{{ not (states(var_away_from_home) == 'off' or states(var_away_from_home) == 'unknown') }}"
+
+#---------------
+# actions
+#---------------
+
+action:
+  - choose:
+      - conditions:
+          #---------------
+          # Case 1 - To turn ON the Termo when motion is detected.
+          #---------------
+          - condition: trigger
+            id:
+              - on_M_1
+              - on_M_2
+              - on_M_3
+              - on_M_4
+          - condition: template
+            value_template: '{{ not var_bol_away_from_home }}'
+            # In home
+        sequence:
+          - service: homeassistant.turn_on
+            target:
+              entity_id: !input 'in_target_entity_control'
+          # LOG
+          - service: logbook.log
+            data:
+              message: 'Case 1: Turn on the switch/Termo'
+              name: 'Case RUN'
+        alias: Turn on the target
+      - conditions:
+          #---------------
+          # Case 2 - To turn OFF the Termo when time is finished.
+          #---------------
+          - condition: trigger
+            id:
+              - off_M
+              - off_M_1
+              - off_M_2
+              - off_M_3
+              - off_M_4
+        sequence:
+          - service: homeassistant.turn_off
+            target:
+              entity_id: !input 'in_target_entity_control'
+          # LOG
+          - service: logbook.log
+            data:
+              message: 'Case 2: Turn off the switch/Termo'
+              name: 'Case RUN'
+        alias: Turn off the target
+
+mode: single
