@@ -1,6 +1,6 @@
 # 2024-12-09
 blueprint:
-  name: Prego - Automatic Termo - By Time and Person v0.2
+  name: Prego - Automatic Termo - By Time and Person v0.5
   description: >
     # 🔆 Config electric water heater switch
 
@@ -41,22 +41,34 @@ trigger:
     id: off_M_1
   - platform: time
     at: '06:45:00'
-    id: on_M_2
+    id: on_M_week_1
   - platform: time
     at: '09:00:00'
-    id: off_M_2
+    id: off_M_week_1
   - platform: time
-    at: '14:30:00'
-    id: on_M_3
+    at: '07:45:00'
+    id: on_M_FinSem_1
+  - platform: time
+    at: '11:10:00'
+    id: off_M_FinSem_1
+  - platform: time
+    at: '11:30:00'
+    id: on_M_week_2
+  - platform: time
+    at: '12:00:00'
+    id: off_M_week_2
+  - platform: time
+    at: '14:00:00'
+    id: on_T_1
   - platform: time
     at: '15:30:00'
-    id: off_M_3
+    id: off_T_1
   - platform: time
     at: '18:30:00'
-    id: on_M_4
+    id: on_T_2
   - platform: time
     at: '19:00:00'
-    id: off_M_4
+    id: off_T_2
 
 #---------------
 # variables
@@ -66,6 +78,8 @@ variables:
   var_away_from_home: !input in_away_from_home
   var_target_entities: !input in_target_entity_control
   var_bol_away_from_home: "{{ not (states(var_away_from_home) == 'off' or states(var_away_from_home) == 'unknown') }}"
+  is_weekend: >
+    {{ now().weekday() in [5, 6] }}
 
 #---------------
 # actions
@@ -75,17 +89,20 @@ action:
   - choose:
       - conditions:
           #---------------
-          # Case 1 - To turn ON the Termo when motion is detected.
+          # Case ON 1 - To turn ON the Termo.
           #---------------
           - condition: trigger
             id:
               - on_M_1
-              - on_M_2
-              - on_M_3
-              - on_M_4
+              - on_T_1
+              - on_T_2
           - condition: template
             value_template: '{{ not var_bol_away_from_home }}'
             # In home
+          - condition: state
+            entity_id: !input 'in_target_entity_control'
+            state: 'off'
+            # is OFF el estado actual
         sequence:
           - service: homeassistant.turn_on
             target:
@@ -94,7 +111,62 @@ action:
           - service: logbook.log
             data:
               message: 'Case 1: Turn on the switch/Termo'
-              name: 'Case RUN'
+              name: 'Termo'
+        alias: Turn on the target
+      - conditions:
+          #---------------
+          # Case ON 2 - To turn ON the Termo when L-F.
+          #---------------
+          - condition: trigger
+            id:
+              - on_M_week_1
+              - on_M_week_2
+          - condition: template
+            value_template: '{{ not var_bol_away_from_home }}'
+            # In home
+          - condition: template
+            value_template: '{{ not is_weekend }}'
+            # is NOT weekend
+          - condition: state
+            entity_id: !input 'in_target_entity_control'
+            state: 'off'
+            # is OFF el estado actual
+        sequence:
+          - service: homeassistant.turn_on
+            target:
+              entity_id: !input 'in_target_entity_control'
+          # LOG
+          - service: logbook.log
+            data:
+              message: 'Case 1: Turn on the switch/Termo l-F'
+              name: 'Termo'
+        alias: Turn on the target
+      - conditions:
+          #---------------
+          # Case ON 3 - To turn ON the Termo when Sat and Sun.
+          #---------------
+          - condition: trigger
+            id:
+              - on_M_FinSem_1
+          - condition: template
+            value_template: '{{ not var_bol_away_from_home }}'
+            # In home
+          - condition: template
+            value_template: '{{ is_weekend }}'
+            # is weekend
+          - condition: state
+            entity_id: !input 'in_target_entity_control'
+            state: 'off'
+            # is OFF el estado actual
+        sequence:
+          - service: homeassistant.turn_on
+            target:
+              entity_id: !input 'in_target_entity_control'
+          # LOG
+          - service: logbook.log
+            data:
+              message: 'Case 1: Turn on the switch/Termo weekend'
+              name: 'Termo'
         alias: Turn on the target
       - conditions:
           #---------------
@@ -104,9 +176,11 @@ action:
             id:
               - off_M
               - off_M_1
-              - off_M_2
-              - off_M_3
-              - off_M_4
+              - off_M_week_1
+              - off_M_FinSem_1
+              - off_M_week_2
+              - off_T_1
+              - off_T_2
         sequence:
           - service: homeassistant.turn_off
             target:
@@ -115,7 +189,7 @@ action:
           - service: logbook.log
             data:
               message: 'Case 2: Turn off the switch/Termo'
-              name: 'Case RUN'
+              name: 'Termo'
         alias: Turn off the target
 
 mode: single
