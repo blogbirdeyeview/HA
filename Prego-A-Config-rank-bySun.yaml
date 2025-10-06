@@ -1,10 +1,10 @@
-# 2024-10-06
+# 2025-09-11
 blueprint:
-  name: Prego - Config rank of sunlight - By Sun - Cloud Cover v0.25
+  name: Prego - Config rank of sunlight - By Sun - Light inside v0.35
   description: >
     # 🔆 Config rank of sunlight
 
-    Adjust sunrise and sunset times based on cloud cover.
+    Adjust sunrise and sunset times based on the sun and the amount of light inside the house.
 
     Required = *
 
@@ -27,19 +27,19 @@ blueprint:
       selector:
         entity:
           domain: input_datetime
-    in_cloud_cover:
-      name: Cloud Cover Sensor *
-      description: Sensor that indicates cloud cover in percentage.
+    in_ldr_sensor:
+      name: LDR Sensor *
+      description: Sensor of the amount of light inside the house, measured in percentage.
       selector:
         entity:
           domain: sensor
-    in_extra_cloud_time:
-      name: Extra Time for Cloud Cover
-      description: The additional time in minutes due to cloud cover.
-      default: 150
+    in_extra_ldr_time:
+      name: Extra time due to darkness inside the house (LDR)
+      description: Additional time in minutes due to darkness inside the house.
+      default: 100
       selector:
         number:
-          min: 0
+          min: 10
           max: 300
           unit_of_measurement: 'min'
     in_base_offset_morning_minutes:
@@ -79,7 +79,7 @@ trigger:
     offset: '-00:30:00'
   - platform: time
     at: !input in_time_morning
-  - trigger: time
+  - platform: time
     at: '14:30:00'
   - platform: sun
     event: sunset
@@ -93,18 +93,36 @@ trigger:
   - platform: time
     at: !input in_time_night
   - platform: numeric_state
-    entity_id: !input in_cloud_cover
+    entity_id: !input in_ldr_sensor
     above: 45
     below: 55
+    for:
+      minutes: 5
   - platform: numeric_state
-    entity_id: !input in_cloud_cover
+    entity_id: !input in_ldr_sensor
+    below: 60
+    for:
+      minutes: 2
+  - platform: numeric_state
+    entity_id: !input in_ldr_sensor
+    below: 40
+    for:
+      minutes: 3
+  - platform: numeric_state
+    entity_id: !input in_ldr_sensor
     above: 50
+    for:
+      minutes: 5
   - platform: numeric_state
-    entity_id: !input in_cloud_cover
+    entity_id: !input in_ldr_sensor
     above: 75
+    for:
+      minutes: 5
   - platform: numeric_state
-    entity_id: !input in_cloud_cover
+    entity_id: !input in_ldr_sensor
     above: 90
+    for:
+      minutes: 5
 
 #---------------
 # variables
@@ -112,9 +130,9 @@ trigger:
 variables:
   var_sensor_time_morning: !input in_time_morning
   var_sensor_time_night: !input in_time_night
-  var_sensor_cloud_cover: !input in_cloud_cover
-  var_cloud_cover: '{{ states(var_sensor_cloud_cover) | float }}'
-  var_extra_cloud_time: !input in_extra_cloud_time
+  var_sensor_ldr: !input in_ldr_sensor
+  var_ldr: '{{ states(var_sensor_ldr) | float(0) }}'
+  var_extra_ldr_time: !input in_extra_ldr_time
   var_base_offset_morning_minutes: !input in_base_offset_morning_minutes
   var_base_offset_afternoon_minutes: !input in_base_offset_afternoon_minutes
   var_sunrise_time: "{{ state_attr('sun.sun', 'next_rising') }}"
@@ -124,37 +142,41 @@ variables:
 # actions
 #---------------
 
-action:
-  - service: input_datetime.set_datetime
-    data:
+actions:
+  - action: input_datetime.set_datetime
+    target:
       entity_id: !input in_time_morning
+    data:
       datetime: >
         {% set tiempo_offset = var_base_offset_morning_minutes * 60 %}
         {{ (as_timestamp(var_sunrise_time) + tiempo_offset) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
 
-  - service: input_datetime.set_datetime
-    data:
+  - action: input_datetime.set_datetime
+    target:
       entity_id: !input in_time_night
+    data:
       datetime: >
         {% set tiempo_offset = var_base_offset_afternoon_minutes * 60 %}
         {{ (as_timestamp(var_sunset_time) - tiempo_offset) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
 
-  - service: input_datetime.set_datetime
-    data:
+  - action: input_datetime.set_datetime
+    target:
       entity_id: !input in_time_morning
+    data:
       datetime: >
         {% set base_time = as_timestamp(strptime(states(var_sensor_time_morning), '%H:%M:%S')) %}
-        {% set offset_minutes = 1 + (var_extra_cloud_time * (var_cloud_cover / 100)) %}
-        {% set cloud_adjustment = offset_minutes * 60 %}
-        {{ (base_time + cloud_adjustment) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
+        {% set offset_minutes = 1 + (var_extra_ldr_time * ((100 - var_ldr) / 100)) %}
+        {% set ldr_adjustment = offset_minutes * 60 %}
+        {{ (base_time + ldr_adjustment) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
 
-  - service: input_datetime.set_datetime
-    data:
+  - action: input_datetime.set_datetime
+    target:
       entity_id: !input in_time_night
+    data:
       datetime: >
         {% set base_time = as_timestamp(strptime(states(var_sensor_time_night), '%H:%M:%S')) %}
-        {% set offset_minutes = 1 + (var_extra_cloud_time * (var_cloud_cover / 100)) %}
-        {% set cloud_adjustment = offset_minutes * 60 %}
-        {{ (base_time - cloud_adjustment) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
+        {% set offset_minutes = 1 + (var_extra_ldr_time * ((100 - var_ldr) / 100)) %}
+        {% set ldr_adjustment = offset_minutes * 60 %}
+        {{ (base_time - ldr_adjustment) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
 
 mode: single
