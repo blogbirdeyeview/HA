@@ -1,6 +1,6 @@
-# 2024-10-06
+# 2025-11-10
 blueprint:
-  name: Prego - Config Lack of sunlight - By sun prego v0.6
+  name: Prego - Config Lack of sunlight - By sun prego v0.9
   description:
     Config - defines the boolean for the lack of light, guided by the sunrise and sunset settings -- lack of sunlight.
     The automation includes optionally features such as preventing activation when away from home and considering stealth mode.
@@ -11,18 +11,22 @@ blueprint:
   #---------------
 
   input:
+    #*** Filter
     in_away_from_home:
       name: Are you away from home?
       description: Indicator signaling the absence of occupants at home (travel status).
+      default: ''
       selector:
         entity:
           domain: input_boolean
     in_stealth_mode:
       name: Are you in stealth mode?
       description: Indicator signaling that you want to be a ninja in the home (everyone sleeping / suspicious noise).
+      default: []
       selector:
         entity:
           domain: input_boolean
+          multiple: true
     in_time_morning:
       name: Sunrise Helper
       description: Choose the time helper corresponding to sunrise.
@@ -35,12 +39,40 @@ blueprint:
       selector:
         entity:
           integration: input_datetime
+    #*** Action
     in_target_entity_control:
       name: Lack of Sunlight Indicator
       description: Boolean that reflects the lack of sunlight.
       selector:
         entity:
           domain: input_boolean
+
+#---------------
+# variables
+#---------------
+
+variables:
+  var_away_from_home: !input in_away_from_home
+  var_stealth_mode: !input in_stealth_mode
+  var_target_entities: !input in_target_entity_control
+  var_bol_away_from_home: >
+    {% if not var_away_from_home %}
+      {{ false }}
+    {% else %}
+      {{ is_state(var_away_from_home, 'on') | bool }}
+    {% endif %}
+  var_bol_stealth_mode: >
+    {% if not var_stealth_mode or (var_stealth_mode | length == 0) %}
+      {{ false }}
+    {% else %}
+      {{
+        (expand(var_stealth_mode)
+          | selectattr('state', 'eq', 'on')
+          | list
+          | count > 0)
+        | bool
+      }}
+    {% endif %}
 
 #---------------
 # triggers
@@ -53,11 +85,6 @@ trigger:
   - platform: time
     at: !input in_time_night
     id: trigger_time_night
-  - platform: state
-    entity_id:
-      - !input in_away_from_home
-      - !input in_stealth_mode
-    id: trigger_state_config
 
 #---------------
 # conditions
@@ -81,8 +108,6 @@ condition:
           - condition: state
             entity_id: !input in_target_entity_control
             state: 'off'
-      - condition: trigger
-        id: trigger_state_config
 
 #---------------
 # actions
@@ -96,13 +121,13 @@ action:
           - condition: time
             after: !input in_time_night
             before: !input in_time_morning
-          - condition: state
-            entity_id: !input in_away_from_home
-            state: 'off'
-          - condition: state
-            entity_id: !input in_stealth_mode
-            state: 'off'
         sequence:
+          - condition: template
+            value_template: '{{ not var_bol_away_from_home }}'
+            # In home
+          - condition: template
+            value_template: '{{ not var_bol_stealth_mode }}'
+            # No ninjas at home
           - service: input_boolean.turn_on
             target:
               entity_id: !input in_target_entity_control
@@ -119,13 +144,13 @@ action:
           - condition: time
             after: !input in_time_night
             before: !input in_time_morning
-          - condition: state
-            entity_id: !input in_away_from_home
-            state: 'off'
-          - condition: state
-            entity_id: !input in_stealth_mode
-            state: 'off'
         sequence:
+          - condition: template
+            value_template: '{{ not var_bol_away_from_home }}'
+            # In home
+          - condition: template
+            value_template: '{{ not var_bol_stealth_mode }}'
+            # No ninjas at home
           - service: input_boolean.turn_on
             target:
               entity_id: !input in_target_entity_control

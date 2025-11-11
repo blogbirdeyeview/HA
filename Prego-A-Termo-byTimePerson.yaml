@@ -1,6 +1,6 @@
-# 2024-12-09
+# 2025-11-10
 blueprint:
-  name: Prego - Automatic Termo - By Time and Person v0.7
+  name: Prego - Automatic Termo - By Time and Person v0.9
   description: >
     # 🔆 Config electric water heater switch
 
@@ -11,6 +11,7 @@ blueprint:
   #---------------
 
   input:
+    #*** Filter
     in_away_from_home:
       name: Are you away from home?
       description: Indicator signaling the absence of occupants at home (travel status).
@@ -18,6 +19,7 @@ blueprint:
       selector:
         entity:
           domain: input_boolean
+    #*** Action
     in_target_entity_control:
       name: Electric water heater switch
       description: Electric water heater switch entity
@@ -83,7 +85,12 @@ trigger:
 variables:
   var_away_from_home: !input in_away_from_home
   var_target_entities: !input in_target_entity_control
-  var_bol_away_from_home: "{{ not (states(var_away_from_home) == 'off' or states(var_away_from_home) == 'unknown') }}"
+  var_bol_away_from_home: >
+    {% if not var_away_from_home %}
+      {{ false }}
+    {% else %}
+      {{ is_state(var_away_from_home, 'on') | bool }}
+    {% endif %}
   is_weekend: >
     {{ now().weekday() in [5, 6] }}
 

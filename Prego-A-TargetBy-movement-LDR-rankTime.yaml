@@ -1,10 +1,10 @@
 # Basado en Prego-A-TargetBy-movement-sun-rankTime.yaml
-# 2025-04-18
+# 2025-11-10
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & LDR - rank of time v1.3
+  name: Prego - Automatic switches/lights - By motion detection & LDR - rank of time v1.7
   description:
-    Automatiza el encendido y apagado de luces o interruptores según el movimiento, la luz solar y horarios específicos (como la hora de dormir).
-    Incluye funciones opcionales como evitar la activación en caso de "fuera del hogar" o al activar el "modo ninja".
+    Automatic switches/lights. Allows the automation of the control of lights or switches based on detected movement, based and the lack of sunlight and specific schedules (sleep time for example).
+    The automation includes optionally features such as preventing activation when away from home and considering stealth mode.
   domain: automation
 
   #---------------
@@ -34,6 +34,7 @@ blueprint:
           min: 1
           max: 60
           unit_of_measurement: minutes
+    #*** Filter
     in_away_from_home:
       name: Are you away from home?
       description: Indicator signaling the absence of occupants at home (travel status).
@@ -44,10 +45,11 @@ blueprint:
     in_stealth_mode:
       name: Are you in stealth mode?
       description: Indicator signaling that you want to be a ninja in the home (everyone sleeping / suspicious noise).
-      default: ''
+      default: []
       selector:
         entity:
           domain: input_boolean
+          multiple: true
     in_time_morning:
       name: Sunrise Helper
       description: Choose the time helper corresponding to sunrise.
@@ -74,6 +76,7 @@ blueprint:
       default: '07:00:00'
       selector:
         time: {}
+    #*** Action
     in_target_entity_control:
       name: Target switch/light to control
       description: Choose the switches/lights that you want to control automatically.
@@ -88,14 +91,37 @@ blueprint:
 # variables
 #---------------
 
-variables:
+trigger_variables:
   var_motion_sensor_keep_alive: !input in_motion_sensor_keep_alive
   var_away_from_home: !input in_away_from_home
   var_stealth_mode: !input in_stealth_mode
   var_target_entities: !input in_target_entity_control
-  var_bol_motion_sensor_keep_alive: "{{ not (states(var_motion_sensor_keep_alive) == 'off' or states(var_motion_sensor_keep_alive) == 'unknown') }}"
-  var_bol_away_from_home: "{{ not (states(var_away_from_home) == 'off' or states(var_away_from_home) == 'unknown') }}"
-  var_bol_stealth_mode: "{{ not (states(var_stealth_mode) == 'off' or states(var_stealth_mode) == 'unknown') }}"
+
+variables:
+  var_bol_motion_sensor_keep_alive: >
+    {% if not var_motion_sensor_keep_alive %}
+      {{ false }}
+    {% else %}
+      {{ is_state(var_motion_sensor_keep_alive, 'on') | bool }}
+    {% endif %}
+  var_bol_away_from_home: >
+    {% if not var_away_from_home %}
+      {{ false }}
+    {% else %}
+      {{ is_state(var_away_from_home, 'on') | bool }}
+    {% endif %}
+  var_bol_stealth_mode: >
+    {% if not var_stealth_mode or (var_stealth_mode | length == 0) %}
+      {{ false }}
+    {% else %}
+      {{
+        (expand(var_stealth_mode)
+          | selectattr('state', 'eq', 'on')
+          | list
+          | count > 0)
+        | bool
+      }}
+    {% endif %}
 
 #---------------
 # Automatizacion para enceder la luz al detectar movimiento.
@@ -140,15 +166,11 @@ condition:
     # Verifica si al menos una luz está encendida (lista para apagar)
     value_template: >
       {{
-      (trigger.id == 'trigger_motion_start' and
-      expand(var_target_entities) | selectattr('state', 'eq', 'off') | list | length > 0) 
-      or
-      (trigger.id == 'trigger_motion_end' and
-      expand(var_target_entities) | selectattr('state', 'eq', 'on') | list | length > 0) 
-      or
-      trigger.id == 'trigger_time_morning'
-      or
-      trigger.id == 'trigger_time_night'
+        (trigger.id == 'trigger_motion_start' and expand(var_target_entities) | selectattr('state','in',['off','unavailable','unknown']) | list | length > 0) 
+        or
+        (trigger.id == 'trigger_motion_end' and expand(var_target_entities) | selectattr('state', 'eq', 'on') | list | length > 0) 
+        or
+        (trigger.id in ['trigger_time_morning', 'trigger_time_night'])
       }}
 
 #---------------
@@ -165,6 +187,7 @@ action:
             id:
               - trigger_motion_start
               - trigger_time_night
+        sequence:
           - condition: template
             value_template: '{{ not var_bol_away_from_home }}'
             # In home
@@ -189,7 +212,6 @@ action:
               - condition: time
                 after: !input 'in_clock_in_time'
                 before: !input 'in_clock_out_time'
-        sequence:
           - service: homeassistant.turn_on
             target:
               entity_id: !input 'in_target_entity_control'
@@ -201,13 +223,13 @@ action:
           - condition: trigger
             id:
               - trigger_motion_end
+        sequence:
           - condition: state
             entity_id: !input 'in_motion_sensor'
             state: 'off'
           - condition: template
             value_template: '{{ not var_bol_motion_sensor_keep_alive }}'
             # keep alive is OFF
-        sequence:
           - service: homeassistant.turn_off
             target:
               entity_id: !input 'in_target_entity_control'

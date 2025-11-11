@@ -1,6 +1,6 @@
-# 2024-10-01
+# 2025-11-05
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & sun v3.7
+  name: Prego - Automatic switches/lights - By motion detection & sun v3.14
   description:
     Automatic switches/lights. Allows you to automatically control the target based on motion detection and the lack of sunlight.
     The automation includes optionally features such as preventing activation when away from home and considering stealth mode.
@@ -26,6 +26,7 @@ blueprint:
           min: 1
           max: 600
           unit_of_measurement: seconds
+    #*** Filter
     in_away_from_home:
       name: Are you away from home?
       description: Indicator signaling the absence of occupants at home (travel status).
@@ -36,24 +37,24 @@ blueprint:
     in_stealth_mode:
       name: Are you in stealth mode?
       description: Indicator signaling that you want to be a ninja in the home (everyone sleeping / suspicious noise).
-      default: ''
+      default: []
       selector:
         entity:
           domain: input_boolean
+          multiple: true
     in_time_morning:
       name: Sunrise Helper
       description: Choose the time helper corresponding to sunrise.
       selector:
         entity:
           integration: input_datetime
-          multiple: false
     in_time_night:
       name: Sunset Helper
       description: Choose the time helper corresponding to Sunset.
       selector:
         entity:
           integration: input_datetime
-          multiple: false
+    #*** Action
     in_target_entity_control:
       name: Target switch/light to control
       description: Choose the switches/lights that you want to control automatically.
@@ -72,8 +73,24 @@ variables:
   var_away_from_home: !input in_away_from_home
   var_stealth_mode: !input in_stealth_mode
   var_target_entities: !input in_target_entity_control
-  var_bol_away_from_home: "{{ not (states(var_away_from_home) == 'off' or states(var_away_from_home) == 'unknown') }}"
-  var_bol_stealth_mode: "{{ not (states(var_stealth_mode) == 'off' or states(var_stealth_mode) == 'unknown') }}"
+  var_bol_away_from_home: >
+    {% if not var_away_from_home %}
+      {{ false }}
+    {% else %}
+      {{ is_state(var_away_from_home, 'on') | bool }}
+    {% endif %}
+  var_bol_stealth_mode: >
+    {% if not var_stealth_mode or (var_stealth_mode | length == 0) %}
+      {{ false }}
+    {% else %}
+      {{
+        (expand(var_stealth_mode)
+          | selectattr('state', 'eq', 'on')
+          | list
+          | count > 0)
+        | bool
+      }}
+    {% endif %}
 
 #---------------
 # Automatizacion para enceder la luz al detectar movimiento.
@@ -109,15 +126,11 @@ condition:
     # Verifica si al menos una luz está encendida (lista para apagar)
     value_template: >
       {{
-      (trigger.id == 'trigger_motion_start' and
-      expand(var_target_entities) | selectattr('state', 'eq', 'off') | list | length > 0) 
-      or
-      (trigger.id == 'trigger_motion_end' and
-      expand(var_target_entities) | selectattr('state', 'eq', 'on') | list | length > 0) 
-      or
-      trigger.id == 'trigger_time_morning'
-      or
-      trigger.id == 'trigger_time_night'
+        (trigger.id == 'trigger_motion_start' and expand(var_target_entities) | selectattr('state','in',['off','unavailable','unknown']) | list | length > 0) 
+        or
+        (trigger.id == 'trigger_motion_end' and expand(var_target_entities) | selectattr('state', 'eq', 'on') | list | length > 0) 
+        or
+        (trigger.id in ['trigger_time_morning', 'trigger_time_night'])
       }}
 
 #---------------
@@ -126,7 +139,8 @@ condition:
 
 action:
   - choose:
-      - conditions:
+      - alias: Turn on the target
+        conditions:
           #---------------
           # Case 1 - To turn ON the light when motion is detected.
           #---------------
@@ -134,6 +148,7 @@ action:
             id:
               - trigger_motion_start
               - trigger_time_night
+        sequence:
           - condition: template
             value_template: '{{ not var_bol_away_from_home }}'
             # In home
@@ -152,27 +167,26 @@ action:
               - condition: time
                 before: !input 'in_time_morning'
                 # Before time
-        sequence:
           - service: homeassistant.turn_on
             target:
               entity_id: !input 'in_target_entity_control'
-        alias: Turn on the target
-      - conditions:
+      - alias: Turn off the target
+        conditions:
           #---------------
           # Case 2 - To turn OFF the light when movement is finished.
           #---------------
           - condition: trigger
             id:
               - trigger_motion_end
+        sequence:
           - condition: state
             entity_id: !input 'in_motion_sensor'
             state: 'off'
-        sequence:
           - service: homeassistant.turn_off
             target:
               entity_id: !input 'in_target_entity_control'
-        alias: Turn off the target
-      - conditions:
+      - alias: Turn off the target - it's already morning!
+        conditions:
           #---------------
           # Case 3 - para apagar la luz al tener luz de dia.
           #---------------
@@ -183,5 +197,10 @@ action:
           - service: homeassistant.turn_off
             target:
               entity_id: !input 'in_target_entity_control'
-        alias: Turn off the target - it's already morning!
+    default:
+      - service: system_log.write
+        data:
+          message: 'Prego-A-TargetBy-movement-sun -- No matching condition — stealth={{ var_bol_stealth_mode }}, away={{ var_bol_away_from_home }}'
+          level: info
+
 mode: single

@@ -1,6 +1,6 @@
-# 2024-10-01
+# 2025-11-11
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection v2.15
+  name: Prego - Automatic switches/lights - By motion detection v4.7
   description:
     Automatic switches/lights. When detecting movement - control of a switch/light based on motion detection and customizable conditions.
     The automation includes optionally features such as preventing activation when away from home and considering stealth mode.
@@ -26,6 +26,7 @@ blueprint:
           min: 1
           max: 600
           unit_of_measurement: seconds
+    #*** Filter
     in_away_from_home:
       name: Are you away from home?
       description: Indicator signaling the absence of occupants at home (travel status).
@@ -36,10 +37,11 @@ blueprint:
     in_stealth_mode:
       name: Are you in stealth mode?
       description: Indicator signaling that you want to be a ninja in the home (everyone sleeping / suspicious noise).
-      default: ''
+      default: []
       selector:
         entity:
           domain: input_boolean
+          multiple: true
     in_target_entity_control:
       name: Target switch/light to control
       description: Choose the switches/lights that you want to control automatically.
@@ -58,8 +60,24 @@ variables:
   var_away_from_home: !input in_away_from_home
   var_stealth_mode: !input in_stealth_mode
   var_target_entities: !input in_target_entity_control
-  var_bol_away_from_home: "{{ not (states(var_away_from_home) == 'off' or states(var_away_from_home) == 'unknown') }}"
-  var_bol_stealth_mode: "{{ not (states(var_stealth_mode) == 'off' or states(var_stealth_mode) == 'unknown') }}"
+  var_bol_away_from_home: >
+    {% if not var_away_from_home %}
+      {{ false }}
+    {% else %}
+      {{ is_state(var_away_from_home, 'on') | bool }}
+    {% endif %}
+  var_bol_stealth_mode: >
+    {% if not var_stealth_mode or (var_stealth_mode | length == 0) %}
+      {{ false }}
+    {% else %}
+      {{
+        (expand(var_stealth_mode)
+          | selectattr('state', 'eq', 'on')
+          | list
+          | count > 0)
+        | bool
+      }}
+    {% endif %}
 
 #---------------
 # Automatizacion para enceder la luz al detectar movimiento.
@@ -89,11 +107,9 @@ condition:
     # Verifica si al menos una luz está encendida (lista para apagar)
     value_template: >
       {{
-      (trigger.id == 'trigger_motion_start' and
-      expand(var_target_entities) | selectattr('state', 'eq', 'off') | list | length > 0) 
-      or
-      (trigger.id == 'trigger_motion_end' and
-      expand(var_target_entities) | selectattr('state', 'eq', 'on') | list | length > 0) 
+        (trigger.id == 'trigger_motion_start' and expand(var_target_entities) | selectattr('state','in',['off','unavailable','unknown']) | list | length > 0) 
+        or
+        (trigger.id == 'trigger_motion_end' and expand(var_target_entities) | selectattr('state', 'eq', 'on') | list | length > 0) 
       }}
 
 #---------------
@@ -113,6 +129,20 @@ action:
   #    data:
   #      message: 'Valor de la VAR var_bol_away_from_home: {{ var_bol_away_from_home }}'
   #      name: 'var_bol_away_from_home'
+  #- service: logbook.log
+  #  data:
+  #    name: 'DEBUG - Automática por movimiento'
+  #    message: |
+  #      ---
+  #      🧩 DEBUG VARIABLES
+  #      - trigger.id: {{ trigger.id }}
+  #      - var_away_from_home: {{ var_away_from_home }}
+  #      - state(var_away_from_home): {% if var_away_from_home %}{{ states(var_away_from_home) }}{% else %}N/A{% endif %}
+  #      - var_bol_away_from_home: {{ var_bol_away_from_home }}
+  #      - var_stealth_mode: {{ var_stealth_mode }}
+  #      - estados_stealth_mode: {% if var_stealth_mode | length > 0 %}{{ expand(var_stealth_mode) | map(attribute='entity_id') | list }}{% else %}N/A{% endif %}
+  #      - var_bol_stealth_mode: {{ var_bol_stealth_mode }}
+  #      ---
   - choose:
       - conditions:
           #---------------
@@ -121,6 +151,7 @@ action:
           - condition: trigger
             id:
               - trigger_motion_start
+        sequence:
           - condition: template
             value_template: '{{ not var_bol_away_from_home }}'
             # In home
@@ -131,7 +162,6 @@ action:
             entity_id: !input 'in_motion_sensor'
             state: 'on'
             # Motion detected
-        sequence:
           - service: homeassistant.turn_on
             target:
               entity_id: !input 'in_target_entity_control'
@@ -148,10 +178,10 @@ action:
           - condition: trigger
             id:
               - trigger_motion_end
+        sequence:
           - condition: state
             entity_id: !input 'in_motion_sensor'
             state: 'off'
-        sequence:
           - service: homeassistant.turn_off
             target:
               entity_id: !input 'in_target_entity_control'
