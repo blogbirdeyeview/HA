@@ -1,6 +1,6 @@
-# 2025-11-10
+# 2025-11-11
 blueprint:
-  name: Prego - Config Wake up to configurable actions at next alarm v2.7
+  name: Prego - Config Wake up to configurable actions at next alarm v2.8
   description: Automate actions before an alarm, using a specific time interval and selected alarm sources to trigger events such as turning on lights. You don't need the location of the phone.
   domain: automation
 
@@ -35,6 +35,23 @@ blueprint:
         entity:
           integration: input_datetime
           multiple: false
+    #*** Filter
+    in_away_from_home:
+      name: Are you away from home?
+      description: Indicator signaling the absence of occupants at home (travel status).
+      default: ''
+      selector:
+        entity:
+          domain: input_boolean
+    in_stealth_mode:
+      name: Are you in stealth mode?
+      description: Indicator signaling that you want to be a ninja in the home (everyone sleeping / suspicious noise).
+      default: []
+      selector:
+        entity:
+          domain: input_boolean
+          multiple: true
+    #*** Action
     in_actions:
       name: Actions
       description: Actions to run before alarm goes off
@@ -48,6 +65,26 @@ blueprint:
 
 variables:
   offset: !input in_offset
+  var_away_from_home: !input in_away_from_home
+  var_stealth_mode: !input in_stealth_mode
+  var_bol_away_from_home: >
+    {% if not var_away_from_home %}
+      {{ false }}
+    {% else %}
+      {{ is_state(var_away_from_home, 'on') | bool }}
+    {% endif %}
+  var_bol_stealth_mode: >
+    {% if not var_stealth_mode or (var_stealth_mode | length == 0) %}
+      {{ false }}
+    {% else %}
+      {{
+        (expand(var_stealth_mode)
+          | selectattr('state', 'eq', 'on')
+          | list
+          | count > 0)
+        | bool
+      }}
+    {% endif %}
 
 trigger:
   - platform: time
@@ -64,7 +101,8 @@ trigger:
 
 action:
   - choose:
-      - conditions:
+      - alias: 'Set helper datetime offset'
+        conditions:
           - condition: trigger
             id: helper_update
           - condition: template
@@ -72,20 +110,25 @@ action:
               {% set new_state = trigger.to_state.state %}
               {{ new_state is not none and new_state not in ["unknown", "unavailable"] }}
         sequence:
-          - alias: 'Set helper datetime offset'
-            service: input_datetime.set_datetime
+          - service: input_datetime.set_datetime
             data:
               timestamp: >
                 {{ (as_timestamp(trigger.to_state.state) | int) - offset }}
             target:
               entity_id: !input in_alarm_helper
 
-      - conditions:
+      - alias: 'Execute wake-up actions'
+        conditions:
           - condition: trigger
             id: wake_up
         sequence:
-          - alias: 'Execute wake-up actions'
-            sequence: !input in_actions
+          - condition: template
+            value_template: '{{ not var_bol_away_from_home }}'
+            # In home
+          - condition: template
+            value_template: '{{ not var_bol_stealth_mode }}'
+            # No ninjas at home
+          - sequence: !input in_actions
     default: []
 
 mode: single
