@@ -1,9 +1,9 @@
 # 2025-11-11
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection v4.7
-  description:
+  name: Prego - Automatic switches/lights - By motion detection v4.8
+  description: >
     Automatic switches/lights. When detecting movement - control of a switch/light based on motion detection and customizable conditions.
-    The automation includes optionally features such as preventing activation when away from home and considering stealth mode.
+    The automation optionally includes features such as preventing activation when away from home and considering stealth mode.
   domain: automation
 
   #---------------
@@ -29,14 +29,14 @@ blueprint:
     #*** Filter
     in_away_from_home:
       name: Are you away from home?
-      description: Indicator signaling the absence of occupants at home (travel status).
+      description: Indicator signaling no one is at home (travel / away status).
       default: ''
       selector:
         entity:
           domain: input_boolean
     in_stealth_mode:
       name: Are you in stealth mode?
-      description: Indicator signaling that you want to be a ninja in the home (everyone sleeping / suspicious noise).
+      description: Indicator signaling that you want to be a ninja at home (everyone sleeping / suspicious noise).
       default: []
       selector:
         entity:
@@ -80,7 +80,7 @@ variables:
     {% endif %}
 
 #---------------
-# Automatizacion para enceder la luz al detectar movimiento.
+# Automatizacion para encender la luz al detectar movimiento.
 #---------------
 
 trigger:
@@ -143,8 +143,10 @@ action:
   #      - estados_stealth_mode: {% if var_stealth_mode | length > 0 %}{{ expand(var_stealth_mode) | map(attribute='entity_id') | list }}{% else %}N/A{% endif %}
   #      - var_bol_stealth_mode: {{ var_bol_stealth_mode }}
   #      ---
+
   - choose:
-      - conditions:
+      - alias: 'Turn ON the target'
+        conditions:
           #---------------
           # Case 1 - To turn ON the light when motion is detected.
           #---------------
@@ -170,8 +172,9 @@ action:
             data:
               message: 'Case 1: Turn on the switch/light'
               name: 'Case RUN'
-        alias: Turn on the target
-      - conditions:
+
+      - alias: 'Turn OFF the target'
+        conditions:
           #---------------
           # Case 2 - To turn OFF the light when movement is finished.
           #---------------
@@ -190,5 +193,4 @@ action:
             data:
               message: 'Case 2: Turn off the switch/light'
               name: 'Case RUN'
-        alias: Turn off the target
 mode: single

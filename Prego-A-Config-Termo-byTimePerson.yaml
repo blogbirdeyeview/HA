@@ -1,6 +1,6 @@
-# 2025-11-10
+# 2025-11-22
 blueprint:
-  name: Prego - Automatic Termo - By Time and Person v0.9
+  name: Prego - Config Automatic Termo - By Time and Person v0.11
   description: >
     # 🔆 Config electric water heater switch
 
@@ -14,7 +14,7 @@ blueprint:
     #*** Filter
     in_away_from_home:
       name: Are you away from home?
-      description: Indicator signaling the absence of occupants at home (travel status).
+      description: Indicator signaling no one is at home (travel / away status).
       default: ''
       selector:
         entity:
@@ -22,7 +22,7 @@ blueprint:
     #*** Action
     in_target_entity_control:
       name: Electric water heater switch
-      description: Electric water heater switch entity
+      description: Electric water heater (Termo) switch entity
       selector:
         entity:
           domain: switch
@@ -32,6 +32,7 @@ blueprint:
 #---------------
 
 trigger:
+  #--- Todos los dias - Mornings
   - platform: time
     at: '00:10:00'
     id: M_off
@@ -52,16 +53,16 @@ trigger:
     at: '11:15:00'
     id: week_M_2_on
   - platform: time
-    at: '12:30:00'
+    at: '12:45:00'
     id: week_M_2_off
   #--- FIN de Semana
   - platform: time
-    at: '07:45:00'
+    at: '07:35:00'
     id: finSem_M_1_on
   - platform: time
-    at: '11:10:00'
+    at: '11:20:00'
     id: finSem_M_1_off
-  #--- Todos los dias
+  #--- Todos los dias Afternoon
   - platform: time
     at: '14:00:00'
     id: T_on_1
@@ -69,11 +70,17 @@ trigger:
     at: '15:45:00'
     id: T_off_1
   - platform: time
-    at: '18:30:00'
+    at: '18:00:00'
     id: T_on_2
   - platform: time
     at: '19:00:00'
     id: T_off_2
+  - platform: time
+    at: '20:00:00'
+    id: T_on_3
+  - platform: time
+    at: '20:30:00'
+    id: T_off_3
   - platform: time
     at: '21:00:00'
     id: T_off
@@ -99,6 +106,7 @@ variables:
 #---------------
 
 action:
+  # Comun todos los dias
   - choose:
       - conditions:
           #---------------
@@ -109,6 +117,8 @@ action:
               - M_on_1
               - T_on_1
               - T_on_2
+              - T_on_3
+        sequence:
           - condition: template
             value_template: '{{ not var_bol_away_from_home }}'
             # In home
@@ -116,7 +126,6 @@ action:
             entity_id: !input 'in_target_entity_control'
             state: 'off'
             # is OFF el estado actual
-        sequence:
           - service: homeassistant.turn_on
             target:
               entity_id: !input 'in_target_entity_control'
@@ -136,6 +145,7 @@ action:
               - M_off_1
               - T_off_1
               - T_off_2
+              - T_off_3
               - T_off
         sequence:
           - service: homeassistant.turn_off
@@ -147,11 +157,12 @@ action:
               message: 'Case 2: Turn off the switch/Termo'
               name: 'Termo'
         alias: Turn off the target
+
   - if:
       - condition: template
         value_template: "{{ is_weekend }}"
     then:
-       # is weekend
+      # is weekend
       - choose:
           - conditions:
               #---------------
@@ -160,6 +171,7 @@ action:
               - condition: trigger
                 id:
                   - finSem_M_1_on
+            sequence:
               - condition: template
                 value_template: '{{ not var_bol_away_from_home }}'
                 # In home
@@ -167,7 +179,6 @@ action:
                 entity_id: !input 'in_target_entity_control'
                 state: 'off'
                 # is OFF el estado actual
-            sequence:
               - service: homeassistant.turn_on
                 target:
                   entity_id: !input 'in_target_entity_control'
@@ -179,7 +190,7 @@ action:
             alias: Turn on the target
           - conditions:
               #---------------
-              # Case 2 - To turn OFF the Termo when time is finished.
+              # Case 2 - To turn OFF the Termo when time is finished (weekend).
               #---------------
               - condition: trigger
                 id:
@@ -191,20 +202,21 @@ action:
               # LOG
               - service: logbook.log
                 data:
-                  message: 'Case 2: Turn off the switch/Termo'
+                  message: 'Case 2: Turn off the switch/Termo weekend'
                   name: 'Termo'
             alias: Turn off the target
     else:
-      # is NOT weekend
+      # is NOT weekend (Mon–Fri)
       - choose:
           - conditions:
               #---------------
-              # Case 1 - To turn ON the Termo when L-F.
+              # Case 1 - To turn ON the Termo when M-F.
               #---------------
               - condition: trigger
                 id:
                   - week_M_1_on
                   - week_M_2_on
+            sequence:
               - condition: template
                 value_template: '{{ not var_bol_away_from_home }}'
                 # In home
@@ -212,19 +224,18 @@ action:
                 entity_id: !input 'in_target_entity_control'
                 state: 'off'
                 # is OFF el estado actual
-            sequence:
               - service: homeassistant.turn_on
                 target:
                   entity_id: !input 'in_target_entity_control'
               # LOG
               - service: logbook.log
                 data:
-                  message: 'Case 1: Turn on the switch/Termo l-F'
+                  message: 'Case 1: Turn on the switch/Termo M-F'
                   name: 'Termo'
             alias: Turn on the target
           - conditions:
               #---------------
-              # Case 2 - To turn OFF the Termo when time is finished.
+              # Case 2 - To turn OFF the Termo when time is finished (weekdays).
               #---------------
               - condition: trigger
                 id:
@@ -237,7 +248,8 @@ action:
               # LOG
               - service: logbook.log
                 data:
-                  message: 'Case 2: Turn off the switch/Termo'
+                  message: 'Case 2: Turn off the switch/Termo weekdays'
                   name: 'Termo'
             alias: Turn off the target
+
 mode: single

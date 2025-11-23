@@ -1,10 +1,11 @@
 # Basado en Prego-A-TargetBy-movement-sun.yaml
-# 2025-11-05
+# USO - Miguel
+# 2025-11-22
 blueprint:
-  name: Prego - Automatic switches/lights custom - By motion detection & sun v1.18
-  description:
+  name: Prego - Automatic switches/lights custom - By motion detection & sun v1.19
+  description: >
     Automatic switches/lights. Allows you to automatically (custom light switch on by script) control the target based on motion detection and the lack of sunlight.
-    The automation includes optionally features such as preventing activation when away from home and considering stealth mode.
+    The automation optionally includes features such as preventing activation when away from home and considering stealth mode.
   domain: automation
 
   #---------------
@@ -19,25 +20,25 @@ blueprint:
         entity:
           domain: binary_sensor
     in_inactivity_timeout:
-      name: No Motion Duration
-      description: Time in minutes with no motion to trigger
-      default: 2
+      name: No motion duration
+      description: Time to trigger after no motion detected.
+      default:
+        hours: 0
+        minutes: 2
+        seconds: 0
       selector:
-        number:
-          min: 1
-          max: 60
-          unit_of_measurement: minutes
+        duration: {}
     #*** Filter
     in_away_from_home:
       name: Are you away from home?
-      description: Indicator signaling the absence of occupants at home (travel status).
+      description: Indicator signaling no one is at home (travel / away status).
       default: ''
       selector:
         entity:
           domain: input_boolean
     in_stealth_mode:
       name: Are you in stealth mode?
-      description: Indicator signaling that you want to be a ninja in the home (everyone sleeping / suspicious noise).
+      description: Indicator signaling that you want to be a ninja at home (everyone sleeping / suspicious noise).
       default: []
       selector:
         entity:
@@ -51,7 +52,7 @@ blueprint:
           integration: input_datetime
     in_time_night:
       name: Sunset Helper
-      description: Choose the time helper corresponding to Sunset.
+      description: Choose the time helper corresponding to sunset.
       selector:
         entity:
           integration: input_datetime
@@ -100,7 +101,7 @@ variables:
     {% endif %}
 
 #---------------
-# Automatizacion para enceder la luz al detectar movimiento.
+# Automatizacion para encender la luz al detectar movimiento.
 #---------------
 
 trigger:
@@ -112,8 +113,7 @@ trigger:
     entity_id: !input 'in_motion_sensor'
     id: trigger_motion_end
     to: 'off'
-    for:
-      minutes: !input 'in_inactivity_timeout'
+    for: !input in_inactivity_timeout
   - platform: time
     id: trigger_time_morning
     at: !input 'in_time_morning'
@@ -153,6 +153,7 @@ action:
             id:
               - trigger_motion_start
               - trigger_time_night
+        sequence:
           - condition: template
             value_template: '{{ not var_bol_away_from_home }}'
             # In home
@@ -171,8 +172,8 @@ action:
               - condition: time
                 before: !input 'in_time_morning'
                 # Before time
-        # CUSTOM para turn ON
-        sequence: !input in_actions_on
+          # CUSTOM para turn ON
+          - sequence: !input in_actions_on
 
       - alias: 'Turn OFF when no motion'
         conditions:
@@ -193,7 +194,7 @@ action:
       - alias: 'Turn OFF at sunrise'
         conditions:
           #---------------
-          # Case 3 - para apagar la luz al tener luz de dia.
+          # Case 3 - To turn OFF the light when it is daytime.
           #---------------
           - condition: trigger
             id:
