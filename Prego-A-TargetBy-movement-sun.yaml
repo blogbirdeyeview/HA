@@ -1,8 +1,8 @@
 # Basado en Prego-A-TargetBy-1movement.yaml
-# USO - Miguel
 # 2025-11-22
+# USO - Miguel
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & sun v4.7
+  name: Prego - Automatic switches/lights - By motion detection & sun v4.8
   description: >
     Automatic switches/lights. Allows you to automatically control the target based on motion detection and the lack of sunlight.
     The automation optionally includes features such as preventing activation when away from home and considering stealth mode.
@@ -230,6 +230,15 @@ action:
             id:
               - trigger_time_morning
         sequence:
+          - condition: state
+            entity_id: !input 'in_motion_sensor'
+            state: 'off'
+          - condition: state
+            entity_id: !input 'in_motion_sensor'
+            state: 'off'
+            for: !input in_inactivity_timeout
+          - condition: template
+            value_template: '{{ not var_bol_motion_sensor_keep_alive }}'
           - service: homeassistant.turn_off
             target:
               entity_id: !input 'in_target_entity_control'

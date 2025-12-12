@@ -1,12 +1,13 @@
+# Basado en Prego-A-TargetBy-1movement.yaml
+# 2025-12-12
 # USO - Miguel
-# 2025-11-10
 blueprint:
-  name: Prego - Automatic switches/lights custom - By motion detection v1.2
-  description:
+  name: Prego - Automatic switches/lights custom - By motion detection v1.3
+  description: >
     Automatic switches/lights. When detecting movement - control of a switch/light (custom light switch on by script) based on motion detection and customizable conditions.
-    The automation includes optionally features such as preventing activation when away from home and considering stealth mode.
+    The automation optionally includes features such as preventing activation when away from home and considering stealth mode.
   domain: automation
-
+  #
   #---------------
   # input
   #---------------
@@ -18,15 +19,22 @@ blueprint:
       selector:
         entity:
           domain: binary_sensor
-    in_inactivity_timeout:
-      name: No Motion Duration
-      description: Time in seconds with no motion to trigger
-      default: 120
+    in_motion_sensor_keep_alive:
+      name: Motion sensor (keep alive only)
+      description: Optional sensor that prevents turning off the light if motion is still detected.
+      default: ''
       selector:
-        number:
-          min: 1
-          max: 600
-          unit_of_measurement: seconds
+        entity:
+          domain: binary_sensor
+    in_inactivity_timeout:
+      name: No motion duration
+      description: Time to trigger after no motion detected.
+      default:
+        hours: 0
+        minutes: 2
+        seconds: 0
+      selector:
+        duration: {}
     #*** Filter
     in_away_from_home:
       name: Are you away from home?
@@ -64,10 +72,19 @@ blueprint:
 # variables
 #---------------
 
-variables:
+trigger_variables:
+  var_motion_sensor_keep_alive: !input in_motion_sensor_keep_alive
   var_away_from_home: !input in_away_from_home
   var_stealth_mode: !input in_stealth_mode
   var_target_entities: !input in_target_entity_control
+
+variables:
+  var_bol_motion_sensor_keep_alive: >
+    {% if not var_motion_sensor_keep_alive %}
+      {{ false }}
+    {% else %}
+      {{ is_state(var_motion_sensor_keep_alive, 'on') | bool }}
+    {% endif %}
   var_bol_away_from_home: >
     {% if not var_away_from_home %}
       {{ false }}
@@ -88,7 +105,7 @@ variables:
     {% endif %}
 
 #---------------
-# Automatizacion para enceder la luz al detectar movimiento.
+# Automation to turn ON when motion is detected.
 #---------------
 
 trigger:
@@ -100,10 +117,16 @@ trigger:
     entity_id: !input 'in_motion_sensor'
     id: trigger_motion_end
     to: 'off'
-    for:
-      hours: 0
-      minutes: 0
-      seconds: !input 'in_inactivity_timeout'
+    for: !input in_inactivity_timeout
+  - platform: template
+    id: trigger_motion_end_keep_alive
+    value_template: >
+      {% if var_motion_sensor_keep_alive is not none and var_motion_sensor_keep_alive != '' %}
+        {{ is_state(var_motion_sensor_keep_alive, 'off') }}
+      {% else %}
+        false
+      {% endif %}
+    for: !input in_inactivity_timeout
 
 #---------------
 # conditions
@@ -111,15 +134,15 @@ trigger:
 
 condition:
   - condition: template
-    # Verifica si al menos una luz está apagada (lista para encender)
-    # Verifica si al menos una luz está encendida (lista para apagar)
+    # Checks if at least one light is OFF (ready to turn ON)
+    # Checks if at least one light is ON (ready to turn OFF)
     value_template: >
       {{
-      (trigger.id == 'trigger_motion_start' and
-      expand(var_target_entities) | selectattr('state', 'eq', 'off') | list | length > 0) 
-      or
-      (trigger.id == 'trigger_motion_end' and
-      expand(var_target_entities) | selectattr('state', 'eq', 'on') | list | length > 0) 
+        (trigger.id == 'trigger_motion_start' and expand(var_target_entities) | selectattr('state','in',['off','unavailable','unknown']) | list | length > 0) 
+        or
+        (trigger.id == 'trigger_motion_end' and expand(var_target_entities) | selectattr('state', 'eq', 'on') | list | length > 0) 
+        or
+        (trigger.id == 'trigger_motion_end_keep_alive' and expand(var_target_entities) | selectattr('state', 'eq', 'on') | list | length > 0) 
       }}
 
 #---------------
@@ -139,14 +162,17 @@ action:
   #    data:
   #      message: 'Valor de la VAR var_bol_away_from_home: {{ var_bol_away_from_home }}'
   #      name: 'var_bol_away_from_home'
+
   - choose:
-      - conditions:
+      - alias: 'Turn ON when motion detected'
+        conditions:
           #---------------
           # Case 1 - To turn ON the light when motion is detected.
           #---------------
           - condition: trigger
             id:
               - trigger_motion_start
+        sequence:
           - condition: template
             value_template: '{{ not var_bol_away_from_home }}'
             # In home
@@ -157,19 +183,29 @@ action:
             entity_id: !input 'in_motion_sensor'
             state: 'on'
             # Motion detected
-        # CUSTOM para turn ON
-        sequence: !input in_actions_on
-      - conditions:
+          # CUSTOM para turn ON
+          - sequence: !input in_actions_on
+
+      - alias: 'Turn OFF when no motion'
+        conditions:
           #---------------
           # Case 2 - To turn OFF the light when movement is finished.
           #---------------
           - condition: trigger
             id:
               - trigger_motion_end
+              - trigger_motion_end_keep_alive
+        sequence:
           - condition: state
             entity_id: !input 'in_motion_sensor'
             state: 'off'
-        sequence:
+          - condition: state
+            entity_id: !input 'in_motion_sensor'
+            state: 'off'
+            for: !input in_inactivity_timeout
+          - condition: template
+            value_template: '{{ not var_bol_motion_sensor_keep_alive }}'
+            # keep alive is OFF
           - service: homeassistant.turn_off
             target:
               entity_id: !input 'in_target_entity_control'
@@ -178,5 +214,5 @@ action:
             data:
               message: 'Case 2: Turn off the switch/light'
               name: 'Case RUN'
-        alias: Turn off the target
+
 mode: single
