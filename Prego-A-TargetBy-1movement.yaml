@@ -1,12 +1,15 @@
 # 2026-02-14
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection v5.2
+  name: Prego - Automatic switches/lights - By motion detection v5.3
   description: |
     Automatically controls one or more lights/switches using a motion sensor.
-    Turns the target(s) ON when motion is detected, and turns them OFF after a configurable no-motion timeout.
-    * Optional filters include "away from home" and "stealth mode" to prevent turning ON while those flags are active.
+    - Turns the target(s) ON when motion is detected
+    - Turns the target(s) OFF after a configurable no-motion timeout.
+    - Turns the target(s) OFF at 02:00 as a daily safety shutdown (if any target is ON).
+
     * Optional "keep-alive" motion sensor can prevent turning OFF if motion is still present.
-    * Optional a daily safety shutdown at 02:00 that turns OFF the target(s) if any are ON and posts a persistent notification.
+    * Optional filters include "away from home" and "stealth mode" to prevent turning ON while those flags are active.
+    * Optional post-reboot SafeOff: when Home Assistant starts, turns OFF the target(s) if there is no motion.
   domain: automation
   #
   #---------------

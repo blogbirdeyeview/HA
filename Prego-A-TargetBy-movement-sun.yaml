@@ -2,10 +2,18 @@
 # 2025-11-22
 # USO - Miguel
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & sun v4.8
-  description: >
-    Automatic switches/lights. Allows you to automatically control the target based on motion detection and the lack of sunlight.
-    The automation optionally includes features such as preventing activation when away from home and considering stealth mode.
+  name: Prego - Automatic switches/lights - By motion detection & sun v4.9
+  description: |
+    Automatically controls one or more lights/switches using a motion sensor and a night/day schedule (sunset/sunrise helpers).
+
+    - Turns the target(s) ON when motion is detected during the night window, or when the night period starts.
+    - Turns the target(s) OFF after a configurable no-motion timeout.
+    - Turns the target(s) OFF when the morning period starts (if there is no motion).
+    - Turns the target(s) OFF at 02:00 as a daily safety shutdown (if any target is ON).
+
+    * Optional "keep-alive" motion sensor can prevent turning OFF if motion is still present.
+    * Optional filters include "away from home" and "stealth mode" to prevent turning ON while those flags are active.
+    * Optional post-reboot SafeOff: when Home Assistant starts, turns OFF the target(s) if there is no motion.
   domain: automation
   #
   #---------------
@@ -63,6 +71,13 @@ blueprint:
       selector:
         entity:
           integration: input_datetime
+    #*** Config
+    in_enable_safeoff_post_restart:
+      name: SafeOff post-reboot
+      description: If enabled, Home Assistant will turn off the target devices when it starts if there is no movement.
+      default: false
+      selector:
+        boolean:
     #*** Action
     in_target_entity_control:
       name: Target switch/light to control
@@ -82,6 +97,7 @@ trigger_variables:
   var_motion_sensor_keep_alive: !input in_motion_sensor_keep_alive
   var_away_from_home: !input in_away_from_home
   var_stealth_mode: !input in_stealth_mode
+  var_enable_safeoff_post_restart: !input in_enable_safeoff_post_restart
   var_target_entities: !input in_target_entity_control
 
 variables:
@@ -109,6 +125,16 @@ variables:
         | bool
       }}
     {% endif %}
+  var_bol_any_target_on: >-
+    {{ expand(var_target_entities)
+      | selectattr('state', 'eq', 'on')
+      | list
+      | count > 0 }}
+  var_bol_any_target_offish: >-
+    {{ expand(var_target_entities)
+      | selectattr('state', 'in', ['off','unavailable','unknown'])
+      | list
+      | count > 0 }}
 
 #---------------
 # Automation to turn ON when motion is detected.
@@ -134,6 +160,12 @@ trigger:
       {% endif %}
     for: !input in_inactivity_timeout
   - platform: time
+    at: '02:00:00'
+    id: trigger_time_02am
+  - platform: homeassistant
+    event: start
+    id: trigger_ha_start
+  - platform: time
     id: trigger_time_morning
     at: !input 'in_time_morning'
   - platform: time
@@ -150,11 +182,13 @@ condition:
     # Checks if at least one light is ON (ready to turn OFF)
     value_template: >
       {{
-        (trigger.id == 'trigger_motion_start' and expand(var_target_entities) | selectattr('state','in',['off','unavailable','unknown']) | list | length > 0) 
+        (trigger.id == 'trigger_motion_start' and var_bol_any_target_offish) 
         or
-        (trigger.id == 'trigger_motion_end' and expand(var_target_entities) | selectattr('state', 'eq', 'on') | list | length > 0) 
+        (trigger.id == 'trigger_motion_end' and var_bol_any_target_on) 
         or
-        (trigger.id == 'trigger_motion_end_keep_alive' and expand(var_target_entities) | selectattr('state', 'eq', 'on') | list | length > 0) 
+        (trigger.id == 'trigger_motion_end_keep_alive' and var_bol_any_target_on) 
+        or
+        (trigger.id == 'trigger_time_02am' or trigger.id == 'trigger_ha_start')
         or
         (trigger.id in ['trigger_time_morning', 'trigger_time_night'])
       }}
@@ -165,11 +199,11 @@ condition:
 
 action:
   - choose:
+      #---------------
+      # Case 1 - To turn ON the light when motion is detected.
+      #---------------
       - alias: 'Turn ON when motion detected or night begins'
         conditions:
-          #---------------
-          # Case 1 - To turn ON the light when motion is detected.
-          #---------------
           - condition: trigger
             id:
               - trigger_motion_start
@@ -197,11 +231,11 @@ action:
             target:
               entity_id: !input 'in_target_entity_control'
 
+      #---------------
+      # Case 2 - To turn OFF the light when movement is finished.
+      #---------------
       - alias: 'Turn OFF when no motion'
         conditions:
-          #---------------
-          # Case 2 - To turn OFF the light when movement is finished.
-          #---------------
           - condition: trigger
             id:
               - trigger_motion_end
@@ -221,11 +255,11 @@ action:
             target:
               entity_id: !input 'in_target_entity_control'
 
+      #---------------
+      # Case 3 - To turn OFF the light when it is daytime.
+      #---------------
       - alias: 'Turn off the target - it is already morning!'
         conditions:
-          #---------------
-          # Case 3 - To turn OFF the light when it is daytime.
-          #---------------
           - condition: trigger
             id:
               - trigger_time_morning
@@ -247,5 +281,53 @@ action:
         data:
           message: 'Prego-A-TargetBy-movement-sun -- No matching condition — stealth={{ var_bol_stealth_mode }}, away={{ var_bol_away_from_home }}'
           level: info
+
+      #---------------
+      # Case SAFE - Turn OFF by time (02:00)
+      #---------------
+      - alias: '02:00 Safety shutdown: turn OFF target(s)'
+        conditions:
+          - condition: trigger
+            id:
+              - trigger_time_02am
+        sequence:
+          - alias: 'Check: at least one target is ON'
+            condition: template
+            value_template: '{{ var_bol_any_target_on }}'
+
+          - service: homeassistant.turn_off
+            target:
+              entity_id: !input 'in_target_entity_control'
+          - alias: 'Notify: safety shutdown executed'
+            service: persistent_notification.create
+            data:
+              title: 'Lights off by protector time'
+              message: 'The lights/switches were turned off by programming (02:00) because they were on.'
+
+      #---------------
+      # Case SAFE - Turn OFF after Home Assistant restart
+      #---------------
+      - alias: 'Post-restart SafeOff: turn OFF target(s)'
+        conditions:
+          - condition: trigger
+            id:
+              - trigger_ha_start
+        sequence:
+          - alias: 'Safety toggle enabled?'
+            condition: template
+            value_template: '{{ var_enable_safeoff_post_restart }}'
+          - alias: 'Wait for Home Assistant to finish starting up'
+            delay: '00:00:35'
+          - alias: 'Check: no motion detected'
+            condition: state
+            entity_id: !input in_motion_sensor
+            state: 'off'
+          - alias: 'Check: at least one target is ON'
+            condition: template
+            value_template: '{{ var_bol_any_target_on }}'
+
+          - service: homeassistant.turn_off
+            target:
+              entity_id: !input 'in_target_entity_control'
 
 mode: single
