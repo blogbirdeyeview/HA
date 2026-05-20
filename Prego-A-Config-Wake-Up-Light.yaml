@@ -1,11 +1,13 @@
 # 2026-02-14
 blueprint:
-  name: Prego - Config Wake up to configurable actions at next alarm v2.13
+  name: Prego - Config Wake up to configurable actions at next alarm v2.14
   description: >-
     Runs configurable actions before your next alarm.
     The blueprint listens to an alarm timestamp (from the Home Assistant mobile app) and writes an offset time
     into an input_datetime helper. When that helper time is reached, it executes your chosen actions.
     Optional filters: away from home, stealth mode, and an optional time window (can cross midnight).
+
+    Recommended: use an input_datetime helper with both date and time enabled.
   domain: automation
   #
   #---------------
@@ -24,6 +26,7 @@ blueprint:
           mode: box
           step: 1.0
           unit_of_measurement: minutes
+
     in_alarm_source:
       name: Alarm Source
       description: Select the alarm timestamp entity provided by the Home Assistant mobile app.
@@ -32,13 +35,15 @@ blueprint:
           integration: mobile_app
           device_class: timestamp
           multiple: false
+
     in_alarm_helper:
       name: Alarm Helper
-      description: Select the input_datetime helper that will store the alarm time minus the offset.
+      description: Select the input_datetime helper that will store the alarm time minus the offset (recommended date + time).
       selector:
         entity:
-          integration: input_datetime
+          domain: input_datetime
           multiple: false
+
     #*** Filter
     in_away_from_home:
       name: Are you away from home?
@@ -47,6 +52,7 @@ blueprint:
       selector:
         entity:
           domain: input_boolean
+
     in_stealth_mode:
       name: Are you in stealth mode?
       description: Indicator signaling that you want to be a ninja at home (everyone sleeping / suspicious noise).
@@ -55,6 +61,7 @@ blueprint:
         entity:
           domain: input_boolean
           multiple: true
+
     #*** Config
     in_clock_in_time:
       name: Time window start
@@ -62,12 +69,14 @@ blueprint:
       default: '20:00:00'
       selector:
         time: {}
+
     in_clock_out_time:
       name: Time window End
       description: Until what time will this automation work?
       default: '07:00:00'
       selector:
         time: {}
+
     #*** Action
     in_actions:
       name: Actions
@@ -88,27 +97,28 @@ trigger_variables:
 variables:
   var_bol_away_from_home: >
     {% if not var_away_from_home %}
-      {{ false }}
+    {{ false }}
     {% else %}
-      {{ is_state(var_away_from_home, 'on') | bool }}
+    {{ is_state(var_away_from_home, 'on') | bool }}
     {% endif %}
   var_bol_stealth_mode: >
     {% if not var_stealth_mode or (var_stealth_mode | length == 0) %}
-      {{ false }}
+    {{ false }}
     {% else %}
-      {{
-        (expand(var_stealth_mode)
-          | selectattr('state', 'eq', 'on')
-          | list
-          | count > 0)
-        | bool
-      }}
+    {{
+      (expand(var_stealth_mode)
+      | selectattr('state', 'eq', 'on')
+      | list
+      | count > 0)
+      | bool
+    }}
     {% endif %}
 
 trigger:
   - platform: time
     at: !input in_alarm_helper
     id: wake_up
+
   - platform: state
     entity_id:
       - !input in_alarm_source
@@ -132,10 +142,14 @@ action:
               {% set new_state = trigger.to_state.state %}
               {{ new_state is not none and new_state not in ["unknown", "unavailable"] }}
         sequence:
+          - variables:
+              var_alarm_offset_ts: >
+                {{ (as_timestamp(trigger.to_state.state) | int(0)) - ((var_offset | int(0)) * 60) }}
+
           - service: input_datetime.set_datetime
             data:
               timestamp: >
-                {{ (as_timestamp(trigger.to_state.state) | int) - (var_offset * 60) }}
+                {{ var_alarm_offset_ts | int(0) }}
             target:
               entity_id: !input in_alarm_helper
 
@@ -150,15 +164,22 @@ action:
           - alias: 'Filter: someone is home'
             condition: template
             value_template: '{{ not var_bol_away_from_home }}'
+
           - alias: 'Filter: not in stealth mode'
             condition: template
             value_template: '{{ not var_bol_stealth_mode }}'
+
           - alias: 'Time window: only between start and end'
             condition: time
             after: !input in_clock_in_time
             before: !input in_clock_out_time
 
           - sequence: !input in_actions
+
     default: []
+
+#---------------
+# mode
+#---------------
 
 mode: single

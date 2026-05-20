@@ -1,14 +1,16 @@
-# 2025-09-11
+# 2026-05-15
 # USO - Miguel
 blueprint:
-  name: Prego - Config rank of sunlight - By Sun - Light inside v0.35
+  name: Prego - Config rank of sunlight - By Sun - Light inside v0.38
   description: >
     # 🔆 Config rank of sunlight
 
-    Adjust sunrise and sunset times based on the sun and the amount of light inside the house.
+    Adjust sunrise and sunset helper times based on sun events and the amount of light inside the house.
+
+    This blueprint recalculates the morning and night helpers from sunrise/sunset base offsets,
+    and optionally readjusts them according to the indoor LDR sensor.
 
     Required = *
-
   domain: automation
 
   #---------------
@@ -22,18 +24,21 @@ blueprint:
       selector:
         entity:
           domain: input_datetime
+
     in_time_night:
       name: Sunset Helper *
       description: Choose the time helper corresponding to sunset.
       selector:
         entity:
           domain: input_datetime
+
     in_ldr_sensor:
       name: LDR Sensor *
       description: Sensor of the amount of light inside the house, measured in percentage.
       selector:
         entity:
           domain: sensor
+
     in_extra_ldr_time:
       name: Extra time due to darkness inside the house (LDR)
       description: Additional time in minutes due to darkness inside the house.
@@ -43,6 +48,7 @@ blueprint:
           min: 10
           max: 300
           unit_of_measurement: 'min'
+
     in_base_offset_morning_minutes:
       name: Base Offset for Morning
       description: Base offset in minutes to sunrise.
@@ -52,6 +58,7 @@ blueprint:
           min: 0
           max: 120
           unit_of_measurement: 'min'
+
     in_base_offset_afternoon_minutes:
       name: Base Offset for Afternoon
       description: Base offset in minutes to sunset.
@@ -69,56 +76,77 @@ blueprint:
 trigger:
   - platform: time
     at: '02:30:00'
+
   - platform: sun
     event: sunrise
     offset: '-03:00:00'
+
   - platform: sun
     event: sunrise
     offset: '-01:30:00'
+
   - platform: sun
     event: sunrise
     offset: '-00:30:00'
+
   - platform: time
     at: !input in_time_morning
+
   - platform: time
     at: '14:30:00'
+
   - platform: sun
     event: sunset
     offset: '-03:00:00'
+
   - platform: sun
     event: sunset
     offset: '-01:30:00'
+
   - platform: sun
     event: sunset
     offset: '-00:30:00'
+
   - platform: time
     at: !input in_time_night
+
+  - platform: state
+    entity_id: !input in_time_morning
+
+  - platform: state
+    entity_id: !input in_time_night
+
   - platform: numeric_state
     entity_id: !input in_ldr_sensor
     above: 45
     below: 55
     for:
       minutes: 5
+
   - platform: numeric_state
     entity_id: !input in_ldr_sensor
     below: 60
     for:
       minutes: 2
+
   - platform: numeric_state
     entity_id: !input in_ldr_sensor
     below: 40
     for:
       minutes: 3
+
   - platform: numeric_state
     entity_id: !input in_ldr_sensor
     above: 50
     for:
       minutes: 5
+
   - platform: numeric_state
     entity_id: !input in_ldr_sensor
     above: 75
     for:
       minutes: 5
+
   - platform: numeric_state
     entity_id: !input in_ldr_sensor
     above: 90
@@ -128,6 +156,7 @@ trigger:
 #---------------
 # variables
 #---------------
+
 variables:
   var_sensor_time_morning: !input in_time_morning
   var_sensor_time_night: !input in_time_night
@@ -136,14 +165,15 @@ variables:
   var_extra_ldr_time: !input in_extra_ldr_time
   var_base_offset_morning_minutes: !input in_base_offset_morning_minutes
   var_base_offset_afternoon_minutes: !input in_base_offset_afternoon_minutes
-  var_sunrise_time: "{{ state_attr('sun.sun', 'next_rising') }}"
-  var_sunset_time: "{{ state_attr('sun.sun', 'next_setting') }}"
+  var_sunrise_time: "{{ as_timestamp(state_attr('sun.sun', 'next_rising')) }}"
+  var_sunset_time: "{{ as_timestamp(state_attr('sun.sun', 'next_setting')) }}"
+  var_ldr_adjustment_seconds: '{{ ((1 + (var_extra_ldr_time * ((100 - var_ldr) / 100))) * 60) | int(0) }}'
 
 #---------------
-# actions
+# action
 #---------------
 
-actions:
+action:
   - action: input_datetime.set_datetime
     target:
       entity_id: !input in_time_morning
@@ -179,5 +209,9 @@ actions:
         {% set offset_minutes = 1 + (var_extra_ldr_time * ((100 - var_ldr) / 100)) %}
         {% set ldr_adjustment = offset_minutes * 60 %}
         {{ (base_time - ldr_adjustment) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
+
+#---------------
+# mode
+#---------------
 
 mode: single
