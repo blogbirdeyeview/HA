@@ -5,7 +5,8 @@ blueprint:
     # 🔆 Config electric water heater switch
 
   domain: automation
-
+# Tabulacion necesaria se input
+  #
   #---------------
   # input
   #---------------

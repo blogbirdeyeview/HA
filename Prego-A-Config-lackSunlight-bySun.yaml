@@ -6,6 +6,8 @@ blueprint:
     The automation also reacts when the configured sunrise or sunset helper values change.
     The automation includes optionally features such as preventing activation when away from home and considering stealth mode.
   domain: automation
+# Tabulacion necesaria se input
+  #
   #---------------
   # input
   #---------------

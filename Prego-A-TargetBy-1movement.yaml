@@ -3,14 +3,16 @@ blueprint:
   name: Prego - Automatic switches/lights - By motion detection v5.3
   description: |
     Automatically controls one or more lights/switches using a motion sensor.
-    - Turns the target(s) ON when motion is detected
+    - Turns the target(s) ON when motion is detected.
     - Turns the target(s) OFF after a configurable no-motion timeout.
     - Turns the target(s) OFF at 02:00 as a daily safety shutdown (if any target is ON).
+    - Optionally turns the target(s) OFF after Home Assistant restarts, only when SafeOff post-reboot is enabled and no motion is detected.
 
-    * Optional "keep-alive" motion sensor can prevent turning OFF if motion is still present.
-    * Optional filters include "away from home" and "stealth mode" to prevent turning ON while those flags are active.
-    * Optional post-reboot SafeOff: when Home Assistant starts, turns OFF the target(s) if there is no motion.
+    * Optional "keep-alive" motion sensor prevents turning OFF if motion is still present.
+    * Optional "away from home" filter prevents turning ON while no one is home.
+    * Optional "stealth mode" filter prevents turning ON while one or more stealth flags are active.
   domain: automation
+  # Tabulacion necesaria se input
   #
   #---------------
   # input
@@ -23,6 +25,7 @@ blueprint:
       selector:
         entity:
           domain: binary_sensor
+
     in_motion_sensor_keep_alive:
       name: Motion sensor (keep alive only)
       description: Optional sensor that prevents turning off the light if motion is still detected.
@@ -30,6 +33,7 @@ blueprint:
       selector:
         entity:
           domain: binary_sensor
+
     in_inactivity_timeout:
       name: No motion duration
       description: Time to trigger after no motion detected.
@@ -39,6 +43,7 @@ blueprint:
         seconds: 0
       selector:
         duration: {}
+
     #*** Filter
     in_away_from_home:
       name: Are you away from home?
@@ -47,6 +52,7 @@ blueprint:
       selector:
         entity:
           domain: input_boolean
+
     in_stealth_mode:
       name: Are you in stealth mode?
       description: Indicator signaling that you want to be a ninja at home (everyone sleeping / suspicious noise).
@@ -55,6 +61,7 @@ blueprint:
         entity:
           domain: input_boolean
           multiple: true
+
     #*** Config
     in_enable_safeoff_post_restart:
       name: SafeOff post-reboot
@@ -62,6 +69,7 @@ blueprint:
       default: false
       selector:
         boolean:
+
     #*** Action
     in_target_entity_control:
       name: Target switch/light to control

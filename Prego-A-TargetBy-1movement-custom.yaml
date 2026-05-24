@@ -10,6 +10,7 @@ blueprint:
     * Optional "keep-alive" motion sensor can prevent turning OFF if motion is still present.
     * Optional a daily safety shutdown at 02:00 that turns OFF the target(s) if any are ON and posts a persistent notification.
   domain: automation
+# Tabulacion necesaria se input
   #
   #---------------
   # input

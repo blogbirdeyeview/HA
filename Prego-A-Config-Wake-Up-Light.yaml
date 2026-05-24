@@ -9,6 +9,7 @@ blueprint:
 
     Recommended: use an input_datetime helper with both date and time enabled.
   domain: automation
+# Tabulacion necesaria se input
   #
   #---------------
   # input
