@@ -1,7 +1,7 @@
 # 2026-06-14
 # USO - Miguel
 blueprint:
-  name: Prego - Config rank of sunlight - By Sun - Light inside v0.40
+  name: Prego - Config rank of sunlight - By Sun - Light inside v0.41
   description: >
     # 🔆 Config rank of sunlight
 
@@ -111,12 +111,6 @@ trigger:
   - platform: time
     at: !input in_time_night
 
-  - platform: state
-    entity_id: !input in_time_morning
-
-  - platform: state
-    entity_id: !input in_time_night
-
   - platform: numeric_state
     entity_id: !input in_ldr_sensor
     above: 45
@@ -168,13 +162,12 @@ variables:
   var_base_offset_afternoon_minutes: !input in_base_offset_afternoon_minutes
   var_sunrise_time: "{{ state_attr('sun.sun', 'next_rising') }}"
   var_sunset_time: "{{ state_attr('sun.sun', 'next_setting') }}"
-  var_ldr_adjustment_seconds: '{{ ((1 + (var_extra_ldr_time * ((100 - var_ldr) / 100))) * 60) | int(0) }}'
 
 #---------------
-# action
+# actions
 #---------------
 
-action:
+actions:
   - action: input_datetime.set_datetime
     target:
       entity_id: !input in_time_morning
