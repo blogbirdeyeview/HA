@@ -1,7 +1,7 @@
 # 2026-06-14
 # USO - Miguel
 blueprint:
-  name: Prego - Config rank of sunlight - By Sun - Light inside v0.39
+  name: Prego - Config rank of sunlight - By Sun - Light inside v0.40
   description: >
     # 🔆 Config rank of sunlight
 
@@ -197,7 +197,8 @@ action:
     data:
       datetime: >
         {% set base_time = as_timestamp(strptime(states(var_sensor_time_morning), '%H:%M:%S')) %}
-        {% set ldr_adjustment = var_ldr_adjustment_seconds * 60 %}
+        {% set offset_minutes = 1 + (var_extra_ldr_time * ((100 - var_ldr) / 100)) %}
+        {% set ldr_adjustment = offset_minutes * 60 %}
         {{ (base_time + ldr_adjustment) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
 
   - action: input_datetime.set_datetime
@@ -206,7 +207,8 @@ action:
     data:
       datetime: >
         {% set base_time = as_timestamp(strptime(states(var_sensor_time_night), '%H:%M:%S')) %}
-        {% set ldr_adjustment = var_ldr_adjustment_seconds * 60 %}
+        {% set offset_minutes = 1 + (var_extra_ldr_time * ((100 - var_ldr) / 100)) %}
+        {% set ldr_adjustment = offset_minutes * 60 %}
         {{ (base_time - ldr_adjustment) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
 
 #---------------
