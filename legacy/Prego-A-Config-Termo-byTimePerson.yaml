@@ -1,25 +1,28 @@
 # 2025-11-22
 blueprint:
-  name: Prego - Config Automatic Termo - By Time and Person v0.11
+  name: Prego - Config Automatic Termo - By Time and Person v0.12
   description: >
     # 🔆 Config electric water heater switch
 
   domain: automation
-# Tabulacion necesaria se input
+  homeassistant:
+    min_version: 2024.6.0
+  # Tab necesario por inputs
   #
   #---------------
-  # input
+  # Inputs
   #---------------
 
   input:
     #*** Filter
     in_away_from_home:
-      name: Are you away from home?
-      description: Indicator signaling no one is at home (travel / away status).
+      name: Away from home
+      description: Optional indicator that means nobody is currently home (travel).
       default: ''
       selector:
         entity:
           domain: input_boolean
+
     #*** Action
     in_target_entity_control:
       name: Electric water heater switch
@@ -29,7 +32,7 @@ blueprint:
           domain: switch
 
 #---------------
-# triggers
+# Triggers
 #---------------
 
 trigger:
@@ -87,7 +90,7 @@ trigger:
     id: T_off
 
 #---------------
-# variables
+# Variables
 #---------------
 
 variables:
@@ -103,7 +106,7 @@ variables:
     {{ now().weekday() in [5, 6] }}
 
 #---------------
-# actions
+# Actions
 #---------------
 
 action:
@@ -252,5 +255,9 @@ action:
                   message: 'Case 2: Turn off the switch/Termo weekdays'
                   name: 'Termo'
             alias: Turn off the target
+
+#---------------
+# mode
+#---------------
 
 mode: single

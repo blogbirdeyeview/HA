@@ -1,6 +1,6 @@
 # 2026-02-14
 blueprint:
-  name: Prego - Config Wake up to configurable actions at next alarm v2.14
+  name: Prego - Config Wake up to configurable actions at next alarm v2.15
   description: >-
     Runs configurable actions before your next alarm.
     The blueprint listens to an alarm timestamp (from the Home Assistant mobile app) and writes an offset time
@@ -9,10 +9,12 @@ blueprint:
 
     Recommended: use an input_datetime helper with both date and time enabled.
   domain: automation
-# Tabulacion necesaria se input
+  homeassistant:
+    min_version: 2024.6.0
+  # Tab necesario por inputs
   #
   #---------------
-  # input
+  # Inputs
   #---------------
 
   input:
@@ -45,18 +47,18 @@ blueprint:
           domain: input_datetime
           multiple: false
 
-    #*** Filter
+    #*** Filters
     in_away_from_home:
-      name: Are you away from home?
-      description: Indicator signaling no one is at home (travel / away status).
+      name: Away from home
+      description: Optional indicator that means nobody is currently home (travel).
       default: ''
       selector:
         entity:
           domain: input_boolean
 
     in_stealth_mode:
-      name: Are you in stealth mode?
-      description: Indicator signaling that you want to be a ninja at home (everyone sleeping / suspicious noise).
+      name: Stealth mode
+      description: Optional indicator(s) used to block automatic turn-on, for example when people are sleeping or you want to avoid visible activity.
       default: []
       selector:
         entity:
@@ -87,7 +89,7 @@ blueprint:
         action: {}
 
 #---------------
-# variables
+# Variables
 #---------------
 
 trigger_variables:
@@ -98,13 +100,13 @@ trigger_variables:
 variables:
   var_bol_away_from_home: >
     {% if not var_away_from_home %}
-    {{ false }}
+      {{ false }}
     {% else %}
-    {{ is_state(var_away_from_home, 'on') | bool }}
+      {{ is_state(var_away_from_home, 'on') | bool }}
     {% endif %}
   var_bol_stealth_mode: >
     {% if not var_stealth_mode or (var_stealth_mode | length == 0) %}
-    {{ false }}
+      {{ false }}
     {% else %}
     {{
       (expand(var_stealth_mode)

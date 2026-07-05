@@ -1,51 +1,55 @@
-# 2026-05-15
+# 2026-06-28
 blueprint:
-  name: Prego - Config Lack of sunlight - By sun prego v0.10
+  name: Prego - Config Lack of sunlight - By sun prego v0.14
   description: >
     Config - defines the boolean for the lack of light, guided by the sunrise and sunset settings -- lack of sunlight.
     The automation also reacts when the configured sunrise or sunset helper values change.
     The automation includes optionally features such as preventing activation when away from home and considering stealth mode.
+    It also recalculates on Home Assistant startup.
   domain: automation
-# Tabulacion necesaria se input
+  homeassistant:
+    min_version: 2024.6.0
+  # Tab necesario por inputs
   #
   #---------------
-  # input
+  # Inputs
   #---------------
 
   input:
-    #*** Filter
+    #*** Filters
     in_away_from_home:
-      name: Are you away from home?
-      description: Indicator signaling no one is at home (travel / away status).
+      name: Away from home
+      description: Optional indicator that means nobody is currently home (travel).
       default: ''
       selector:
         entity:
           domain: input_boolean
 
     in_stealth_mode:
-      name: Are you in stealth mode?
-      description: Indicator signaling that you want to be a ninja at home (everyone sleeping / suspicious noise).
+      name: Stealth mode
+      description: Optional indicator(s) used to block automatic turn-on, for example when people are sleeping or you want to avoid visible activity.
       default: []
       selector:
         entity:
           domain: input_boolean
           multiple: true
 
+    #*** Custum Time Prego
     in_time_morning:
-      name: Sunrise Helper
+      name: Sunrise Helper *
       description: Choose the time helper corresponding to sunrise.
       selector:
         entity:
-          integration: input_datetime
+          domain: input_datetime
 
     in_time_night:
-      name: Sunset Helper
+      name: Sunset Helper *
       description: Choose the time helper corresponding to sunset.
       selector:
         entity:
-          integration: input_datetime
+          domain: input_datetime
 
-    #*** Action
+    # Targets
     in_target_entity_control:
       name: Lack of Sunlight Indicator
       description: Boolean that reflects the lack of sunlight.
@@ -54,7 +58,7 @@ blueprint:
           domain: input_boolean
 
 #---------------
-# variables
+# Variables
 #---------------
 
 variables:
@@ -62,13 +66,13 @@ variables:
   var_stealth_mode: !input in_stealth_mode
   var_bol_away_from_home: >
     {% if not var_away_from_home %}
-    {{ false }}
+      {{ false }}
     {% else %}
-    {{ is_state(var_away_from_home, 'on') | bool }}
+      {{ is_state(var_away_from_home, 'on') | bool }}
     {% endif %}
   var_bol_stealth_mode: >
     {% if not var_stealth_mode or (var_stealth_mode | length == 0) %}
-    {{ false }}
+      {{ false }}
     {% else %}
     {{
       (expand(var_stealth_mode)
@@ -80,10 +84,15 @@ variables:
     {% endif %}
 
 #---------------
-# triggers
+# Triggers
 #---------------
 
 trigger:
+  # Recalculate on Home Assistant startup
+  - platform: homeassistant
+    event: start
+    id: trigger_homeassistant_start
+
   - platform: time
     at: !input in_time_morning
     id: trigger_time_morning
@@ -101,83 +110,33 @@ trigger:
     id: trigger_helper_night_changed
 
 #---------------
-# conditions
+# Conditions
 #---------------
 
-condition:
-  - condition: or
-    conditions:
-      - condition: and
-        conditions:
-          - condition: trigger
-            id: trigger_time_morning
-          - condition: state
-            entity_id: !input in_target_entity_control
-            state: 'on'
-        alias: morning
-
-      - condition: and
-        conditions:
-          - condition: trigger
-            id: trigger_time_night
-          - condition: state
-            entity_id: !input in_target_entity_control
-            state: 'off'
-        alias: night
-
-      - condition: trigger
-        id: trigger_helper_morning_changed
-
-      - condition: trigger
-        id: trigger_helper_night_changed
+condition: []
 
 #---------------
-# actions
+# Actions
 #---------------
 
 action:
-  - choose:
-      - conditions:
-          - condition: trigger
-            id: trigger_time_night
-          - condition: time
-            after: !input in_time_night
-            before: !input in_time_morning
-        sequence:
-          - condition: template
-            value_template: '{{ not var_bol_away_from_home }}'
-          # In home
-          - condition: template
-            value_template: '{{ not var_bol_stealth_mode }}'
-          # No ninjas at home
-          - service: input_boolean.turn_on
-            target:
-              entity_id: !input in_target_entity_control
-
-      - conditions:
-          - condition: trigger
-            id: trigger_time_morning
-        sequence:
-          - service: input_boolean.turn_off
-            target:
-              entity_id: !input in_target_entity_control
-
-      - conditions:
-          - condition: time
-            after: !input in_time_night
-            before: !input in_time_morning
-        sequence:
-          - condition: template
-            value_template: '{{ not var_bol_away_from_home }}'
-          # In home
-          - condition: template
-            value_template: '{{ not var_bol_stealth_mode }}'
-          # No ninjas at home
-          - service: input_boolean.turn_on
-            target:
-              entity_id: !input in_target_entity_control
-
-    default:
+  # If current time is inside the night window and there are no blocking flags,
+  # turn ON the lack of sunlight indicator. Otherwise turn it OFF.
+  - if:
+      - condition: time
+        after: !input in_time_night
+        before: !input in_time_morning
+      - condition: template
+        value_template: '{{ not var_bol_away_from_home }}'
+      # Someone is home
+      - condition: template
+        value_template: '{{ not var_bol_stealth_mode }}'
+      # Stealth mode is not active (No ninjas)
+    then:
+      - service: input_boolean.turn_on
+        target:
+          entity_id: !input in_target_entity_control
+    else:
       - service: input_boolean.turn_off
         target:
           entity_id: !input in_target_entity_control
@@ -186,4 +145,4 @@ action:
 # mode
 #---------------
 
-mode: single
+mode: restart

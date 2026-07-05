@@ -1,24 +1,28 @@
-# 2026-06-14
+# 2026-06-28
 # USO - Miguel
 blueprint:
-  name: Prego - Config rank of sunlight - By Sun - Light inside v0.41
+  name: Prego - Config rank of sunlight - By Sun - Light inside v0.56
   description: >
     # 🔆 Config rank of sunlight
 
     Adjust sunrise and sunset helper times based on sun events and the amount of light inside the house.
 
     This blueprint recalculates the morning and night helpers from sunrise/sunset base offsets,
-    and optionally readjusts them according to the indoor LDR sensor.
+    and optionally readjusts them according to the indoor LDR sensor and a fixed helper with the
+    maximum sun elevation reference for the day.
 
     Required = *
   domain: automation
-# Tabulacion necesaria se input
+  homeassistant:
+    min_version: 2024.6.0
+  # Tab necesario por inputs
   #
   #---------------
-  # input
+  # Inputs
   #---------------
 
   input:
+    #*** Custum Time Prego
     in_time_morning:
       name: Sunrise Helper *
       description: Choose the time helper corresponding to sunrise.
@@ -50,6 +54,23 @@ blueprint:
           max: 300
           unit_of_measurement: 'min'
 
+    in_max_sun_elevation_yesterday:
+      name: Max sun elevation helper *
+      description: Helper entity with the maximum sun elevation reference stored for the current day.
+      selector:
+        entity:
+          domain: input_number
+
+    in_extra_sun_elevation_time:
+      name: Extra time due to sun elevation
+      description: Additional time in minutes based on the current sun elevation percentage versus the stored maximum elevation helper.
+      default: 30
+      selector:
+        number:
+          min: 0
+          max: 180
+          unit_of_measurement: 'min'
+
     in_base_offset_morning_minutes:
       name: Base Offset for Morning
       description: Base offset in minutes to sunrise.
@@ -71,7 +92,27 @@ blueprint:
           unit_of_measurement: 'min'
 
 #---------------
-# triggers
+# Variables
+#---------------
+
+variables:
+  var_sensor_time_morning: !input in_time_morning
+  var_sensor_time_night: !input in_time_night
+  var_sensor_ldr: !input in_ldr_sensor
+  var_sensor_max_sun_elevation_yesterday: !input in_max_sun_elevation_yesterday
+
+  var_ldr: '{{ states(var_sensor_ldr) | float(0) }}'
+  var_max_sun_elevation_yesterday: '{{ states(var_sensor_max_sun_elevation_yesterday) | float(0) }}'
+  var_extra_ldr_time: !input in_extra_ldr_time
+  var_extra_sun_elevation_time: !input in_extra_sun_elevation_time
+  var_sun_elevation: "{{ state_attr('sun.sun', 'elevation') | float(0) }}"
+  var_base_offset_morning_minutes: !input in_base_offset_morning_minutes
+  var_base_offset_afternoon_minutes: !input in_base_offset_afternoon_minutes
+  var_sunrise_time: "{{ state_attr('sun.sun', 'next_rising') }}"
+  var_sunset_time: "{{ state_attr('sun.sun', 'next_setting') }}"
+
+#---------------
+# Triggers
 #---------------
 
 trigger:
@@ -149,60 +190,48 @@ trigger:
       minutes: 5
 
 #---------------
-# variables
+# Conditions
 #---------------
 
-variables:
-  var_sensor_time_morning: !input in_time_morning
-  var_sensor_time_night: !input in_time_night
-  var_sensor_ldr: !input in_ldr_sensor
-  var_ldr: '{{ states(var_sensor_ldr) | float(0) }}'
-  var_extra_ldr_time: !input in_extra_ldr_time
-  var_base_offset_morning_minutes: !input in_base_offset_morning_minutes
-  var_base_offset_afternoon_minutes: !input in_base_offset_afternoon_minutes
-  var_sunrise_time: "{{ state_attr('sun.sun', 'next_rising') }}"
-  var_sunset_time: "{{ state_attr('sun.sun', 'next_setting') }}"
-
 #---------------
-# actions
+# Actions
 #---------------
 
 actions:
+  - variables:
+      morning_base_ts: >
+        {% set offset_seconds = var_base_offset_morning_minutes * 60 %}
+        {{ as_timestamp(var_sunrise_time) + offset_seconds }}
+
+      night_base_ts: >
+        {% set offset_seconds = var_base_offset_afternoon_minutes * 60 %}
+        {{ as_timestamp(var_sunset_time) - offset_seconds }}
+
+      total_adjustment_seconds: >
+        {% set ldr_offset_minutes = 1 + (var_extra_ldr_time * ((100 - var_ldr) / 100)) %}
+        {% set sun_reference = [var_max_sun_elevation_yesterday | float(0), 1] | max %}
+        {% set sun_ratio = (var_sun_elevation | float(0)) / sun_reference %}
+        {% set sun_ratio = [0, sun_ratio] | max %}
+        {% set sun_ratio = [1, sun_ratio] | min %}
+        {% set sun_elevation_factor = 1 - sun_ratio %}
+        {% set sun_elevation_offset_minutes = var_extra_sun_elevation_time * sun_elevation_factor %}
+        {{ (ldr_offset_minutes + sun_elevation_offset_minutes) * 60 }}
+
   - action: input_datetime.set_datetime
     target:
       entity_id: !input in_time_morning
     data:
       datetime: >
-        {% set tiempo_offset = var_base_offset_morning_minutes * 60 %}
-        {{ (as_timestamp(var_sunrise_time) + tiempo_offset) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
+        {{ ((morning_base_ts | float(0)) + (total_adjustment_seconds | float(0)))
+          | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
 
   - action: input_datetime.set_datetime
     target:
       entity_id: !input in_time_night
     data:
       datetime: >
-        {% set tiempo_offset = var_base_offset_afternoon_minutes * 60 %}
-        {{ (as_timestamp(var_sunset_time) - tiempo_offset) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
-
-  - action: input_datetime.set_datetime
-    target:
-      entity_id: !input in_time_morning
-    data:
-      datetime: >
-        {% set base_time = as_timestamp(strptime(states(var_sensor_time_morning), '%H:%M:%S')) %}
-        {% set offset_minutes = 1 + (var_extra_ldr_time * ((100 - var_ldr) / 100)) %}
-        {% set ldr_adjustment = offset_minutes * 60 %}
-        {{ (base_time + ldr_adjustment) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
-
-  - action: input_datetime.set_datetime
-    target:
-      entity_id: !input in_time_night
-    data:
-      datetime: >
-        {% set base_time = as_timestamp(strptime(states(var_sensor_time_night), '%H:%M:%S')) %}
-        {% set offset_minutes = 1 + (var_extra_ldr_time * ((100 - var_ldr) / 100)) %}
-        {% set ldr_adjustment = offset_minutes * 60 %}
-        {{ (base_time - ldr_adjustment) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
+        {{ ((night_base_ts | float(0)) - (total_adjustment_seconds | float(0)))
+          | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
 
 #---------------
 # mode

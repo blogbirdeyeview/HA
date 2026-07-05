@@ -2,9 +2,12 @@ blueprint:
   name: Prego - Turn light on - Bulb with incremental brightness v2.2
   description: Turn on a light bulb and gradually increase its brightness until it reaches 40%.
   domain: script
-
+  homeassistant:
+    min_version: 2024.6.0
+  # Tab necesario por inputs
+  #
   #---------------
-  # input
+  # Inputs
   #---------------
 
   input:
