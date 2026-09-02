@@ -24,22 +24,23 @@ sequence:
       entity_id: '{{ in_target_entity_control }}'
     data:
       brightness_pct: >-
-        {% set noon_dt = states('sensor.sun_next_noon') | as_datetime | as_local
-        %} {% set noon_time = noon_dt.strftime('%H:%M:%S') %} {% set noon_today
-        = today_at(noon_time) %}
+        {% set noon_dt = states('sensor.sun_next_noon') | as_datetime | as_local %}
+        {% set noon_time = noon_dt.strftime('%H:%M:%S') %}
+        {% set noon_today = today_at(noon_time) %}
 
-        {# Hours from noon_today #} {% set t = (as_timestamp(now()) -
-        as_timestamp(noon_today)) / 3600 %}
+        {# Hours from noon_today #}
+        {% set t = (as_timestamp(now()) - as_timestamp(noon_today)) / 3600 %}
 
-        {# Ignore date: keep value in [-12, +12] #} {% if t > 12 %}{% set t = t
-        - 24 %}{% endif %} {% if t < -12 %}{% set t = t + 24 %}{% endif %}
+        {# Ignore date: keep value in [-12, +12] #}
+        {% if t > 12 %}{% set t = t - 24 %}{% endif %}
+        {% if t < -12 %}{% set t = t + 24 %}{% endif %}
 
-        {# Triangle: 100% at noon, 0% at +/-12h #} {% set raw = 100 - (t | abs)
-        * (100 / 12) %}
+        {# Triangle: 100% at noon, 0% at +/-12h #}
+        {% set raw = 100 - (t | abs) * (100 / 12) %}
 
-        {# Apply minimum brightness #} {% set minimum = in_min_brightness_pct |
-        float(20) %} {% set brightness = minimum + (raw / 100) * (100 - minimum)
-        %}
+        {# Apply minimum brightness #}
+        {% set minimum = in_min_brightness_pct | float(20) %}
+        {% set brightness = minimum + (raw / 100) * (100 - minimum) %}
 
         {{ [minimum, [brightness, 100] | min] | max | round(0) }}
 description: ''
