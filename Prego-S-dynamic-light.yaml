@@ -1,0 +1,12 @@
+alias: Turn On Light
+fields:
+  target_entity:
+    name: Target light
+    description: Light to turn on
+    selector:
+      entity:
+        domain: light
+sequence:
+  - action: light.turn_on
+    target:
+      entity_id: '{{ target_entity }}'
