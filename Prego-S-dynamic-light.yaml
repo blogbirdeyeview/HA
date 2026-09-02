@@ -1,4 +1,5 @@
 alias: Control Dynamic Light
+
 fields:
   in_target_entity_control:
     name: Target lights
@@ -7,6 +8,7 @@ fields:
       entity:
         domain: light
         multiple: true
+
   in_min_brightness_pct:
     name: Minimum brightness
     description: Minimum brightness percentage
@@ -18,6 +20,19 @@ fields:
         step: 1
         mode: slider
         unit_of_measurement: '%'
+
+  in_max_brightness_pct:
+    name: Maximum brightness
+    description: Maximum brightness percentage
+    default: 100
+    selector:
+      number:
+        min: 0
+        max: 100
+        step: 1
+        mode: slider
+        unit_of_measurement: '%'
+
 sequence:
   - action: light.turn_on
     target:
@@ -38,9 +53,18 @@ sequence:
         {# Triangle: 100% at noon, 0% at +/-12h #}
         {% set raw = 100 - (t | abs) * (100 / 12) %}
 
-        {# Apply minimum brightness #}
+        {# Apply minimum and maximum brightness #}
         {% set minimum = in_min_brightness_pct | float(20) %}
-        {% set brightness = minimum + (raw / 100) * (100 - minimum) %}
+        {% set maximum = in_max_brightness_pct | float(100) %}
 
-        {{ [minimum, [brightness, 100] | min] | max | round(0) }}
+        {# Prevent invalid range #}
+        {% if maximum < minimum %}
+          {% set maximum = minimum %}
+        {% endif %}
+
+        {# Map 0-100% curve to minimum-maximum range #}
+        {% set brightness = minimum + (raw / 100) * (maximum - minimum) %}
+
+        {{ [minimum, [brightness, maximum] | min] | max | round(0) }}
+
 description: ''
