@@ -1,10 +1,11 @@
 # Basado en Prego-A-TargetBy-movement-sun-rankTime.yaml
 # El cual es basado en:
 # Basado en Prego-A-TargetBy-movement-sun.yaml
+# IMPORTANT depende de Prego-S-dynamic-light.yaml (script.control_dynamic_light)
 
-# 2026-02-14
+# 2026-09-02
 blueprint:
-  name: Prego - Automatic lights - By motion detection - rank of time v1.9
+  name: Prego - Automatic lights - By motion detection - rank of time v2.0
   description: |
     Automatically controls one or more lights using a motion sensor and a configurable quiet/sleep time window.
 
@@ -230,27 +231,12 @@ action:
                 after: !input 'in_clock_in_time'
                 before: !input 'in_clock_out_time'
           # EXTRA solo fuera de rango de tiempo
-
-          - service: light.turn_on
-            target:
-              entity_id: !input 'in_target_entity_control'
+          # EXTERNO TURN ON
+          - action: script.control_dynamic_light
             data:
-              #transition: 1
-              brightness_pct: >-
-                {% set noon_dt = states('sensor.sun_next_noon') | as_datetime | as_local %}
-                {% set noon_time = noon_dt.strftime('%H:%M:%S') %}
-                {% set noon_today = today_at(noon_time) %}
-
-                {# t = horas desde noon_today (negativo antes, positivo después) #}
-                {% set t = (as_timestamp(now()) - as_timestamp(noon_today)) / 3600 %}
-
-                {# “wrap” para ignorar fecha: que quede en el rango [-12, +12] #}
-                {% if t > 12 %}{% set t = t - 24 %}{% endif %}
-                {% if t < -12 %}{% set t = t + 24 %}{% endif %}
-
-                {# triángulo continuo: 100% en t=0; 0% en t=±12 #}
-                {% set raw = 100 - (t | abs) * (100/12) %}
-                {{ [0, [raw, 100] | min] | max | round(0) }}
+              in_target_entity_control: !input in_target_entity_control
+              in_min_brightness_pct: 10
+              in_max_brightness_pct: 60
 
       #---------------
       # Case 2 - Turn OFF when no motion is detected

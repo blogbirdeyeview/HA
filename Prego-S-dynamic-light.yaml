@@ -8,6 +8,7 @@ fields:
         domain: light
         multiple: true
     default: []
+
   in_min_brightness_pct:
     name: Minimum brightness
     description: Minimum brightness percentage
@@ -19,6 +20,7 @@ fields:
         step: 1
         mode: slider
         unit_of_measurement: '%'
+
   in_max_brightness_pct:
     name: Maximum brightness
     description: Maximum brightness percentage
@@ -30,6 +32,7 @@ fields:
         step: 1
         mode: slider
         unit_of_measurement: '%'
+
 sequence:
   - if:
       - condition: time
@@ -39,6 +42,7 @@ sequence:
         target:
           entity_id: '{{ in_target_entity_control }}'
         data:
+          transition: 2
           brightness_pct: >-
             {% set noon_dt = states('sensor.sun_next_noon') | as_datetime | as_local %}
             {% set noon_time = noon_dt.strftime('%H:%M:%S') %}
@@ -47,7 +51,7 @@ sequence:
             {# Hours from noon_today #}{#------------------------------------#}
             {% set t = (as_timestamp(now()) - as_timestamp(noon_today)) / 3600 %}
 
-            {# Ignore date: keep value in [-12, +12] #}{#---------------------------------------------- #}
+            {# Ignore date: keep value in [-12, +12] #}{#------------------------------------#}
             {% if t > 12 %}{% set t = t - 24 %}{% endif %}{#------------------------------------#}
             {% if t < -12 %}{% set t = t + 24 %}{% endif %}{#------------------------------------#}
 
@@ -55,8 +59,8 @@ sequence:
             {% set raw = 100 - (t | abs) * (100 / 12) %}
 
             {# Apply minimum and maximum brightness #}{#------------------------------------#}
-            {% set minimum = in_min_brightness_pct | float(20) %}{#-----------------------#}
-            {% set maximum = in_max_brightness_pct | float(100) %}{#-----------------------#}
+            {% set minimum = in_min_brightness_pct | float(20) %}{#------------------------------------#}
+            {% set maximum = in_max_brightness_pct | float(100) %}{#------------------------------------#}
 
             {# Prevent invalid range #}{#------------------------------------#}
             {% if maximum < minimum %}
@@ -67,8 +71,11 @@ sequence:
             {% set brightness = minimum + (raw / 100) * (maximum - minimum) %}
 
             {{ [minimum, [brightness, maximum] | min] | max | round(0) }}
+
     else:
       - action: light.turn_on
-        metadata: {}
+        target:
+          entity_id: '{{ in_target_entity_control }}'
         data: {}
+
 description: ''
