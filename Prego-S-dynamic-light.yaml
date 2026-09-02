@@ -9,6 +9,18 @@ fields:
         multiple: true
     default: []
 
+  in_clock_start_time:
+    name: Dynamic light start time
+    description: Time from which dynamic brightness is enabled.
+    default: '20:00:00'
+    selector:
+      time: {}
+  in_enable_dynamic_brightness:
+    name: Enable dynamic brightness
+    description: If enabled, dynamic brightness is always used regardless of the time.
+    default: false
+    selector:
+      boolean: {}
   in_min_brightness_pct:
     name: Minimum brightness
     description: Minimum brightness percentage
@@ -32,50 +44,50 @@ fields:
         step: 1
         mode: slider
         unit_of_measurement: '%'
-
 sequence:
+  - variables:
+      var_target_entities: '{{ in_target_entity_control }}'
   - if:
       - condition: time
         after: '20:00:00'
+        before: '08:00:00'
     then:
       - action: light.turn_on
         target:
-          entity_id: '{{ in_target_entity_control }}'
+          entity_id: '{{ var_target_entities }}'
         data:
           transition: 2
           brightness_pct: >-
-            {% set noon_dt = states('sensor.sun_next_noon') | as_datetime | as_local %}
-            {% set noon_time = noon_dt.strftime('%H:%M:%S') %}
-            {% set noon_today = today_at(noon_time) %}
+            {% set noon_dt = states('sensor.sun_next_noon') | as_datetime |
+            as_local %} {% set noon_time = noon_dt.strftime('%H:%M:%S') %} {%
+            set noon_today = today_at(noon_time) %}
 
-            {# Hours from noon_today #}{#------------------------------------#}
-            {% set t = (as_timestamp(now()) - as_timestamp(noon_today)) / 3600 %}
+            {# Hours from noon_today #} {% set t = (as_timestamp(now()) -
+            as_timestamp(noon_today)) / 3600 %}
 
-            {# Ignore date: keep value in [-12, +12] #}{#------------------------------------#}
-            {% if t > 12 %}{% set t = t - 24 %}{% endif %}{#------------------------------------#}
-            {% if t < -12 %}{% set t = t + 24 %}{% endif %}{#------------------------------------#}
+            {# Ignore date: keep value in [-12, +12] #} {% if t > 12 %}{% set t
+            = t - 24 %}{% endif %} {% if t < -12 %}{% set t = t + 24 %}{% endif
+            %}
 
-            {# Triangle: 100% at noon, 0% at +/-12h #}{#------------------------------------#}
-            {% set raw = 100 - (t | abs) * (100 / 12) %}
+            {# Triangle: 100% at noon, 0% at +/-12h #} {% set raw = 100 - (t |
+            abs) * (100 / 12) %}
 
-            {# Apply minimum and maximum brightness #}{#------------------------------------#}
-            {% set minimum = in_min_brightness_pct | float(20) %}{#------------------------------------#}
-            {% set maximum = in_max_brightness_pct | float(100) %}{#------------------------------------#}
+            {# Apply minimum and maximum brightness #} {% set minimum =
+            in_min_brightness_pct | float(20) %} {% set maximum =
+            in_max_brightness_pct | float(100) %}
 
-            {# Prevent invalid range #}{#------------------------------------#}
-            {% if maximum < minimum %}
+            {# Prevent invalid range #} {% if maximum < minimum %}
               {% set maximum = minimum %}
             {% endif %}
 
-            {# Map 0-100% curve to minimum-maximum range #}{#------------------------------------#}
-            {% set brightness = minimum + (raw / 100) * (maximum - minimum) %}
+            {# Map 0-100% curve to minimum-maximum range #} {% set brightness =
+            minimum + (raw / 100) * (maximum - minimum) %}
 
             {{ [minimum, [brightness, maximum] | min] | max | round(0) }}
-
     else:
       - action: light.turn_on
         target:
-          entity_id: '{{ in_target_entity_control }}'
+          entity_id: '{{ var_target_entities }}'
         data: {}
 
 description: ''
