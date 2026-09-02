@@ -8,7 +8,6 @@ fields:
         domain: light
         multiple: true
     default: []
-
   in_clock_start_time:
     name: Dynamic light start time
     description: Time from which dynamic brightness is enabled.
@@ -32,7 +31,6 @@ fields:
         step: 1
         mode: slider
         unit_of_measurement: '%'
-
   in_max_brightness_pct:
     name: Maximum brightness
     description: Maximum brightness percentage
@@ -45,16 +43,18 @@ fields:
         mode: slider
         unit_of_measurement: '%'
 sequence:
-  - variables:
-      var_target_entities: '{{ in_target_entity_control }}'
   - if:
-      - condition: time
-        after: '20:00:00'
-        before: '08:00:00'
+      - condition: template
+        value_template: >-
+          {{ in_skip_time_filter
+             or (
+               now().strftime('%H:%M:%S') >= in_clock_start_time
+               or now().strftime('%H:%M:%S') < '08:00:00'
+             ) }}
     then:
       - action: light.turn_on
         target:
-          entity_id: '{{ var_target_entities }}'
+          entity_id: '{{ in_target_entity_control }}'
         data:
           transition: 2
           brightness_pct: >-
@@ -87,7 +87,6 @@ sequence:
     else:
       - action: light.turn_on
         target:
-          entity_id: '{{ var_target_entities }}'
+          entity_id: '{{ in_target_entity_control }}'
         data: {}
-
 description: ''
