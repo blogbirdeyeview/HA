@@ -1,21 +1,25 @@
 # Basado en Prego-A-TargetBy-movement-sun-rankTime.yaml
 # El cual es basado en:
 # Basado en Prego-A-TargetBy-movement-sun.yaml
-# IMPORTANT depende de Prego-S-dynamic-light.yaml (script.control_dynamic_light)
+# IMPORTANT: depends on Prego-S-dynamic-light.yaml (script.control_dynamic_light)
 
 # 2026-09-02
 blueprint:
-  name: Prego - Automatic lights - By motion detection - rank of time v2.0
+  name: Prego - Automatic lights - By motion detection - rank of time v2.1
   description: |
     Automatically controls one or more lights using a motion sensor and a configurable quiet/sleep time window.
 
     - Turns the target(s) ON when motion is detected outside the configured quiet window.
     - Turns the target(s) OFF after a configurable no-motion timeout.
     - Turns the target(s) OFF when the configured quiet window starts (if there is no motion).
+    - Uses dynamic brightness when the configured brightness time is active.
 
     * Optional "keep-alive" motion sensor prevents turning OFF if motion is still present.
     * Optional "away-from-home" filter prevents turning ON while no one is home.
     * Optional "stealth-mode" filter prevents turning ON while one or more stealth flags are active.
+    * Dynamic brightness is handled by script.control_dynamic_light.
+    * Dynamic brightness ends automatically at 08:00.
+    * Dynamic brightness time filtering can be skipped when explicitly enabled.
   domain: automation
   homeassistant:
     min_version: 2024.6.0
@@ -77,6 +81,7 @@ blueprint:
       selector:
         boolean:
 
+    # Motion/light activation quiet window
     in_clock_in_time:
       name: Start of period without light time (23:00:00)
       description: From what time will this automation work?
@@ -88,6 +93,21 @@ blueprint:
       name: End of period without light time (07:00:00)
       description: Until what time will this automation work?
       default: '07:00:00'
+      selector:
+        time: {}
+
+    # Dynamic brightness
+    in_enable_skip_time_filter:
+      name: Skip dynamic brightness time filter
+      description: If enabled, dynamic brightness is always used regardless of the current time.
+      default: false
+      selector:
+        boolean: {}
+
+    in_clock_brightness:
+      name: Dynamic brightness start time
+      description: Time from which dynamic brightness is used. Dynamic brightness always ends at 08:00.
+      default: '20:00:00'
       selector:
         time: {}
 
@@ -111,6 +131,8 @@ trigger_variables:
   var_stealth_mode: !input in_stealth_mode
   var_enable_safeoff_post_restart: !input in_enable_safeoff_post_restart
   var_target_entities: !input in_target_entity_control
+  var_enable_skip_time_filter: !input in_enable_skip_time_filter
+  var_clock_brightness: !input in_clock_brightness
 
 variables:
   var_bol_motion_sensor_keep_alive: >
@@ -231,12 +253,18 @@ action:
                 after: !input 'in_clock_in_time'
                 before: !input 'in_clock_out_time'
           # EXTRA solo fuera de rango de tiempo
-          # EXTERNO TURN ON
+
+          # EXTERNO
+          #---------------
+          # Turn ON using dynamic brightness
+          #---------------
           - action: script.control_dynamic_light
             data:
               in_target_entity_control: !input in_target_entity_control
               in_min_brightness_pct: 10
               in_max_brightness_pct: 60
+              in_enable_skip_time_filter: !input in_enable_skip_time_filter
+              in_clock_brightness: !input in_clock_brightness
 
       #---------------
       # Case 2 - Turn OFF when no motion is detected
