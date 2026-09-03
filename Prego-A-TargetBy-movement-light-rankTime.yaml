@@ -5,7 +5,7 @@
 
 # 2026-09-02
 blueprint:
-  name: Prego - Automatic lights - By motion detection - rank of time v2.1
+  name: Prego - Automatic lights - By motion detection - rank of time v2.2
   description: |
     Automatically controls one or more lights using a motion sensor and a configurable quiet/sleep time window.
 
@@ -264,7 +264,7 @@ action:
               in_min_brightness_pct: 10
               in_max_brightness_pct: 60
               in_enable_skip_time_filter: !input in_enable_skip_time_filter
-              in_clock_brightness: !input in_clock_brightness
+              in_clock_start_time: !input in_clock_brightness
 
       #---------------
       # Case 2 - Turn OFF when no motion is detected
