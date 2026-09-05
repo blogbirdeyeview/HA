@@ -5,12 +5,20 @@ description: >-
 fields:
   in_target_entity_control:
     name: Target lights
-    description: Lights to control. All selected lights must have the same dimming capability.
+    description: >-
+      Lights to control. All selected lights must have the same dimming
+      capability.
     selector:
       entity:
         domain: light
         multiple: true
     default: []
+  in_enable_dynamic_brightness:
+    name: Enable dynamic brightness
+    description: If enabled, dynamic brightness is always used regardless of the time.
+    default: false
+    selector:
+      boolean: {}
   in_clock_start_time:
     name: Dynamic light start time
     description: Time from which dynamic brightness is enabled.
@@ -23,12 +31,6 @@ fields:
     default: '08:00:00'
     selector:
       time: {}
-  in_enable_dynamic_brightness:
-    name: Enable dynamic brightness
-    description: If enabled, dynamic brightness is always used regardless of the time.
-    default: false
-    selector:
-      boolean: {}
   in_min_brightness_pct:
     name: Minimum brightness
     description: Minimum brightness percentage.
