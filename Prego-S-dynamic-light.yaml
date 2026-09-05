@@ -17,6 +17,12 @@ fields:
     default: '20:00:00'
     selector:
       time: {}
+  in_clock_end_time:
+    name: Dynamic light end time
+    description: Time until which dynamic brightness is enabled.
+    default: '08:00:00'
+    selector:
+      time: {}
   in_enable_dynamic_brightness:
     name: Enable dynamic brightness
     description: If enabled, dynamic brightness is always used regardless of the time.
@@ -49,8 +55,10 @@ sequence:
   - variables:
       reference_light: >-
         {{ in_target_entity_control | default([], true) | first | default('', true) }}
+
       supported_color_modes: >-
         {{ state_attr(reference_light, 'supported_color_modes') | default([], true) }}
+
       is_dimmable: >-
         {{
           'brightness' in supported_color_modes
@@ -62,6 +70,16 @@ sequence:
           or 'rgbww' in supported_color_modes
           or 'white' in supported_color_modes
         }}
+
+      clock_start_time: >-
+        {{ in_clock_start_time | default('20:00:00', true) }}
+
+      clock_end_time: >-
+        {{ in_clock_end_time | default('08:00:00', true) }}
+
+      current_time: >-
+        {{ now().strftime('%H:%M:%S') }}
+
   - if:
       - condition: template
         value_template: >-
@@ -69,8 +87,20 @@ sequence:
             is_dimmable
             and (
               in_enable_dynamic_brightness
-              or now().strftime('%H:%M:%S') >= in_clock_start_time
-              or now().strftime('%H:%M:%S') < '08:00:00'
+              and (
+                (
+                  clock_start_time <= clock_end_time
+                  and current_time >= clock_start_time
+                  and current_time <= clock_end_time
+                )
+                or (
+                  clock_start_time > clock_end_time
+                  and (
+                    current_time >= clock_start_time
+                    or current_time <= clock_end_time
+                  )
+                )
+              )
             )
           }}
     then:
@@ -88,6 +118,7 @@ sequence:
             {% if t > 12 %}
               {% set t = t - 24 %}
             {% endif %}
+
             {% if t < -12 %}
               {% set t = t + 24 %}
             {% endif %}
@@ -102,6 +133,7 @@ sequence:
 
             {% set brightness = minimum + (raw / 100) * (maximum - minimum) %}
             {{ [minimum, [brightness, maximum] | min] | max | round(0) }}
+
     else:
       - if:
           - condition: template
