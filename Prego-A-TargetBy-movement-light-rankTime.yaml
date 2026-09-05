@@ -5,7 +5,7 @@
 
 # 2026-09-02
 blueprint:
-  name: Prego - Automatic lights - By motion detection - rank of time v2.3
+  name: Prego - Automatic lights - By motion detection - rank of time v2.4
   description: |
     Automatically controls one or more lights using a motion sensor and a configurable quiet/sleep time window.
 
@@ -97,19 +97,36 @@ blueprint:
         time: {}
 
     # Dynamic brightness
-    in_enable_skip_time_filter:
-      name: Skip dynamic brightness time filter
-      description: If enabled, dynamic brightness is always used regardless of the current time.
-      default: false
-      selector:
-        boolean: {}
+    # ─────────────────────────────
+    # CONFIGURACION AVANZADA
+    # ─────────────────────────────
 
-    in_clock_brightness:
-      name: Dynamic brightness start time
-      description: Time from which dynamic brightness is used. Dynamic brightness always ends at 08:00.
-      default: '20:00:00'
-      selector:
-        time: {}
+    avanzado:
+      name: Configuración avanzada
+      icon: mdi:cog
+      description: >
+        Opciones adicionales para usuarios avanzados.
+      collapsed: true
+      input:
+        in_enable_skip_time_filter:
+          name: Skip dynamic brightness time filter
+          description: If enabled, dynamic brightness is always used regardless of the current time.
+          default: false
+          selector:
+            boolean: {}
+
+        in_clock_start_brightness:
+          name: Dynamic brightness start time
+          description: Time from which dynamic brightness is used. Dynamic brightness always ends at 08:00.
+          default: '20:00:00'
+          selector:
+            time: {}
+        in_clock_end_brightness:
+          name: Dynamic brightness end time
+          description: Time until which dynamic brightness is used.
+          default: "08:00:00"
+          selector:
+            time: {}
 
     #*** Targets
     in_target_entity_control:
@@ -131,8 +148,6 @@ trigger_variables:
   var_stealth_mode: !input in_stealth_mode
   var_enable_safeoff_post_restart: !input in_enable_safeoff_post_restart
   var_target_entities: !input in_target_entity_control
-  var_enable_skip_time_filter: !input in_enable_skip_time_filter
-  var_clock_brightness: !input in_clock_brightness
 
 variables:
   var_bol_motion_sensor_keep_alive: >
@@ -262,7 +277,8 @@ action:
             data:
               in_target_entity_control: !input in_target_entity_control
               in_enable_dynamic_brightness: !input in_enable_skip_time_filter
-              in_clock_start_time: !input in_clock_brightness
+              in_clock_start_time: !input in_clock_start_brightness
+              in_clock_end_time: !input in_clock_end_brightness
               in_min_brightness_pct: 10
               in_max_brightness_pct: 60
 
