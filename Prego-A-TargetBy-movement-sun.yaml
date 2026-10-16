@@ -299,11 +299,6 @@ action:
             entity_id: !input 'in_motion_sensor'
             state: 'off'
 
-          - condition: state
-            entity_id: !input 'in_motion_sensor'
-            state: 'off'
-            for: !input in_inactivity_timeout
-
           - condition: template
             value_template: '{{ not var_bol_motion_sensor_keep_alive }}'
 
