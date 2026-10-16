@@ -338,7 +338,8 @@ action:
       #---------------
       - alias: '02:00 safety shutdown: turn OFF target(s)'
         conditions:
-          - condition: trigger
+          - alias: 'Triggered by the 02:00 safety timer'
+            condition: trigger
             id:
               - trigger_time_02am
         sequence:
@@ -346,7 +347,8 @@ action:
             condition: template
             value_template: '{{ var_bol_any_target_on }}'
 
-          - service: homeassistant.turn_off
+          - alias: 'Turn off targets during the daily safety shutdown'
+            service: homeassistant.turn_off
             target:
               entity_id: !input 'in_target_entity_control'
 
@@ -354,7 +356,7 @@ action:
             service: persistent_notification.create
             data:
               title: >-
-                02:00 safety shutdown executed -
+                02:00 safety shutdown executed - 
                 {{ state_attr(this.entity_id, 'friendly_name') if this is defined and this.entity_id is defined else 'unknown automation' }}
               message: >-
                 Automation: {{ state_attr(this.entity_id, 'friendly_name') if this is defined and this.entity_id is defined else 'unknown automation' }}

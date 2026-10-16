@@ -279,7 +279,8 @@ action:
       #---------------
       - alias: '02:00 safety shutdown: turn OFF target(s)'
         conditions:
-          - condition: trigger
+          - alias: 'Triggered by the 02:00 safety timer'
+            condition: trigger
             id:
               - trigger_time_02am
         sequence:
@@ -287,7 +288,8 @@ action:
             condition: template
             value_template: '{{ var_bol_any_target_on }}'
 
-          - service: homeassistant.turn_off
+          - alias: 'Turn off targets during the daily safety shutdown'
+            service: homeassistant.turn_off
             target:
               entity_id: !input 'in_target_entity_control'
 
