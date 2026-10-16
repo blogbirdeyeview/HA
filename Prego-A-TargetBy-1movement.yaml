@@ -1,6 +1,6 @@
 # 2026-06-27
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection v6.9
+  name: Prego - Automatic switches/lights - By motion detection v6.10
   description: |
     Automatically controls one or more lights/switches based on a motion sensor.
     - Turns the target(s) ON when motion is detected.

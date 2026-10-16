@@ -2,7 +2,7 @@
 # 2025-12-12
 # USO - Miguel
 blueprint:
-  name: Prego - Automatic switches/lights custom - By motion detection v1.10
+  name: Prego - Automatic switches/lights custom - By motion detection v1.11
   description: |
     Automatically controls one or more lights/switches using a motion sensor. (custom light switch ON by script)
 
@@ -215,11 +215,13 @@ action:
             id:
               - trigger_motion_start
         sequence:
-          - condition: template
+          - alias: 'Someone is home'
+            condition: template
             value_template: '{{ not var_bol_away_from_home }}'
             # Someone is home
 
-          - condition: template
+          - alias: 'Stealth mode is inactive'
+            condition: template
             value_template: '{{ not var_bol_stealth_mode }}'
             # Stealth mode is not active (No ninjas)
 

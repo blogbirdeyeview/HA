@@ -5,7 +5,7 @@
 
 # 2026-10-11
 blueprint:
-  name: Prego - Automatic lights - By motion detection - rank of time v2.19
+  name: Prego - Automatic lights - By motion detection - rank of time v2.20
   description: |
     Automatically controls one or more lights using a motion sensor and a configurable quiet/sleep time window.
 
@@ -432,10 +432,12 @@ action:
                     condition: template
                     value_template: '{{ not var_bol_away_from_home }}'
                     # Someone is home
+
                   - alias: 'Stealth mode is inactive'
                     condition: template
                     value_template: '{{ not var_bol_stealth_mode }}'
                     # Stealth mode is not active (No ninjas)
+
                   # Keep the brightness script reachable on motion even when all targets are already on.
                   # - alias: 'Check: at least one target is OFF'
                   #   condition: template

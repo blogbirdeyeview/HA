@@ -2,7 +2,7 @@
 # 2025-11-22
 # USO - Miguel
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & sun v4.13
+  name: Prego - Automatic switches/lights - By motion detection & sun v4.14
   description: |
     Automatically controls one or more lights/switches using a motion sensor and a night/day schedule (sunset/sunrise helpers).
 
@@ -217,11 +217,13 @@ action:
               - trigger_time_night
 
         sequence:
-          - condition: template
+          - alias: 'Someone is home'
+            condition: template
             value_template: '{{ not var_bol_away_from_home }}'
             # Someone is home
 
-          - condition: template
+          - alias: 'Stealth mode is inactive'
+            condition: template
             value_template: '{{ not var_bol_stealth_mode }}'
             # Stealth mode is not active (No ninjas)
 

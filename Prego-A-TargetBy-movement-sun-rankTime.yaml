@@ -1,7 +1,7 @@
 # Basado en Prego-A-TargetBy-movement-sun.yaml
 # 2026-07-02
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & sun - rank of time v3.23
+  name: Prego - Automatic switches/lights - By motion detection & sun - rank of time v3.24
   description: |
     Automatically controls one or more lights/switches using a motion sensor and a configurable time window based on sunlight and schedules.
 
@@ -240,10 +240,12 @@ action:
           - alias: 'Someone is home'
             condition: template
             value_template: '{{ not var_bol_away_from_home }}'
+            # Someone is home
 
-          - alias: 'Stealth mode is not active (No ninjas)'
+          - alias: 'Stealth mode is inactive'
             condition: template
             value_template: '{{ not var_bol_stealth_mode }}'
+            # Stealth mode is not active (No ninjas)
 
           - alias: 'Check: at least one target is OFF'
             condition: template

@@ -1,6 +1,6 @@
 # 2026-06-28
 blueprint:
-  name: Prego - Config Lack of sunlight - By sun prego v0.15
+  name: Prego - Config Lack of sunlight - By sun prego v0.16
   description: >
     Config - defines the boolean for the lack of light, guided by the sunrise and sunset settings -- lack of sunlight.
     The automation also reacts when the configured sunrise or sunset helper values change.
@@ -127,12 +127,15 @@ action:
       - condition: time
         after: !input in_time_night
         before: !input in_time_morning
-      - condition: template
+      - alias: 'Someone is home'
+        condition: template
         value_template: '{{ not var_bol_away_from_home }}'
-      # Someone is home
-      - condition: template
+        # Someone is home
+
+      - alias: 'Stealth mode is inactive'
+        condition: template
         value_template: '{{ not var_bol_stealth_mode }}'
-      # Stealth mode is not active (No ninjas)
+        # Stealth mode is not active (No ninjas)
     then:
       - service: input_boolean.turn_on
         target:
