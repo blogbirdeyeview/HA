@@ -1,25 +1,24 @@
 # Basado en Prego-A-TargetBy-movement-sun-rankTime.yaml
 # El cual es basado en:
 # Basado en Prego-A-TargetBy-movement-sun.yaml
-# IMPORTANT: depends on Prego-S-dynamic-light.yaml (script.control_dynamic_light)
+# IMPORTANT: depends on an instance of Prego-S-dynamic-light.yaml (default: script.prego_dynamic_light_control_v4_XX)
 
-# 2026-09-02
+# 2026-10-11
 blueprint:
-  name: Prego - Automatic lights - By motion detection - rank of time v2.4
+  name: Prego - Automatic lights - By motion detection - rank of time v2.17
   description: |
     Automatically controls one or more lights using a motion sensor and a configurable quiet/sleep time window.
 
     - Turns the target(s) ON when motion is detected outside the configured quiet window.
     - Turns the target(s) OFF after a configurable no-motion timeout.
     - Turns the target(s) OFF when the configured quiet window starts (if there is no motion).
-    - Uses dynamic brightness when the configured brightness time is active.
+    - Brightness control can be disabled, handled internally during a configured time window, or delegated to HACS Adaptive Lighting.
 
     * Optional "keep-alive" motion sensor prevents turning OFF if motion is still present.
     * Optional "away-from-home" filter prevents turning ON while no one is home.
     * Optional "stealth-mode" filter prevents turning ON while one or more stealth flags are active.
-    * Dynamic brightness is handled by script.control_dynamic_light.
-    * Dynamic brightness ends automatically at 08:00.
-    * Dynamic brightness time filtering can be skipped when explicitly enabled.
+    * Internal dynamic brightness uses the selected Prego-S-dynamic-light.yaml script instance during the configured time window. If none is selected, script.prego_script_dynamic_light_control_v4_18_2 is used.
+    * When an Adaptive Lighting adapt_brightness switch is selected, this automation disables it while internal dynamic brightness is active and enables it outside that window or when internal brightness is disabled.
   domain: automation
   homeassistant:
     min_version: 2024.6.0
@@ -102,31 +101,107 @@ blueprint:
     # ─────────────────────────────
 
     avanzado:
-      name: Configuración avanzada
+      name: Advanced configuration
       icon: mdi:cog
       description: >
-        Opciones adicionales para usuarios avanzados.
+        Additional options for advanced users.
       collapsed: true
       input:
         in_enable_skip_time_filter:
-          name: Skip dynamic brightness time filter
-          description: If enabled, dynamic brightness is always used regardless of the current time.
+          name: Enable brightness control
+          description: If enabled, the internal script controls brightness during its configured window and HACS Adaptive Lighting controls it outside that window. If disabled, the script leaves brightness unchanged and the selected HACS switch is enabled.
           default: false
           selector:
             boolean: {}
 
+        in_adaptive_lighting_adapt_brightness_switch:
+          name: HACS Adaptive Lighting brightness switch
+          description: >-
+            Optional. This switch is disabled while internal dynamic brightness
+            is active and enabled outside that window or when internal
+            brightness is disabled. If omitted or unavailable, it is left
+            unchanged.
+          default: ''
+          selector:
+            entity:
+              domain: switch
+              integration: adaptive_lighting
+
+        in_dynamic_brightness_script:
+          name: Internal dynamic brightness script
+          description: >-
+            Optional. Select a script instance created from
+            Prego-S-dynamic-light.yaml. Leave empty to use
+            script.prego_script_dynamic_light_control_v4_18_2.
+          default: ''
+          selector:
+            entity:
+              filter:
+                - domain: script
+
         in_clock_start_brightness:
-          name: Dynamic brightness start time
-          description: Time from which dynamic brightness is used. Dynamic brightness always ends at 08:00.
+          name: Internal dynamic brightness start time
+          description: Start time for the internal dynamic brightness calculation.
           default: '20:00:00'
           selector:
             time: {}
         in_clock_end_brightness:
-          name: Dynamic brightness end time
-          description: Time until which dynamic brightness is used.
-          default: "08:00:00"
+          name: Internal dynamic brightness end time
+          description: End time for the internal dynamic brightness calculation.
+          default: '08:00:00'
           selector:
             time: {}
+
+        in_min_brightness_pct:
+          name: Minimum dynamic brightness
+          description: Minimum brightness percentage. Must be at least 1% and no higher than the maximum brightness.
+          default: 20
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: slider
+              unit_of_measurement: "%"
+
+        in_max_brightness_pct:
+          name: Maximum dynamic brightness
+          description: Maximum brightness percentage. Must not exceed 100% and must be at least the minimum brightness.
+          default: 100
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: slider
+              unit_of_measurement: "%"
+
+        in_brightness_curve_gamma:
+          name: Internal dynamic brightness curve gamma
+          description: >-
+            Optional override for the selected script instance. Use 0 to keep
+            its configured default. Values from 0.1 to 5.0 override it. Higher
+            values steepen dimming between the configured minimum and maximum;
+            they do not change either endpoint.
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 5.0
+              step: 0.1
+              mode: box
+
+        in_light_transition_seconds:
+          name: Light turn-on transition
+          description: Time in seconds for the light to transition to the requested state.
+          default: 2
+          selector:
+            number:
+              min: 0
+              max: 60
+              step: 1
+              mode: slider
+              unit_of_measurement: s
 
     #*** Targets
     in_target_entity_control:
@@ -150,6 +225,24 @@ trigger_variables:
   var_target_entities: !input in_target_entity_control
 
 variables:
+  in_enable_skip_time_filter: !input in_enable_skip_time_filter
+  in_adaptive_lighting_adapt_brightness_switch: !input in_adaptive_lighting_adapt_brightness_switch
+  in_clock_start_brightness: !input in_clock_start_brightness
+  in_clock_end_brightness: !input in_clock_end_brightness
+  in_dynamic_brightness_script: !input in_dynamic_brightness_script
+  var_dynamic_brightness_script: >-
+    {{ in_dynamic_brightness_script | default('script.prego_script_dynamic_light_control_v4_18_2', true) }}
+  var_bol_internal_dynamic_brightness_active: >-
+    {% set current_time = now().strftime('%H:%M:%S') %}
+    {% set start_time = in_clock_start_brightness %}
+    {% set end_time = in_clock_end_brightness %}
+    {{
+      in_enable_skip_time_filter | bool
+      and (
+        (start_time < end_time and current_time >= start_time and current_time < end_time)
+        or (start_time > end_time and (current_time >= start_time or current_time < end_time))
+      )
+    }}
   var_bol_motion_sensor_keep_alive: >
     {% if not var_motion_sensor_keep_alive %}
       {{ false }}
@@ -197,17 +290,20 @@ variables:
 
 trigger:
   - platform: state
+    alias: Motion detected
     entity_id: !input 'in_motion_sensor'
     id: trigger_motion_start
     to: 'on'
 
   - platform: state
+    alias: No motion for the configured timeout
     entity_id: !input 'in_motion_sensor'
     id: trigger_motion_end
     to: 'off'
     for: !input in_inactivity_timeout
 
   - platform: template
+    alias: Keep-alive sensor is clear for the configured timeout
     id: trigger_motion_end_keep_alive
     value_template: >
       {% if var_motion_sensor_keep_alive is not none and var_motion_sensor_keep_alive != '' %}
@@ -218,10 +314,22 @@ trigger:
     for: !input in_inactivity_timeout
 
   - platform: time
+    alias: Daily 02:00 safety shutdown
     at: '02:00:00'
     id: trigger_time_02am
 
+  - platform: time
+    alias: Internal dynamic-brightness window starts
+    at: !input in_clock_start_brightness
+    id: trigger_internal_brightness_start
+
+  - platform: time
+    alias: Internal dynamic-brightness window ends
+    at: !input in_clock_end_brightness
+    id: trigger_internal_brightness_end
+
   - platform: homeassistant
+    alias: Home Assistant started
     event: start
     id: trigger_ha_start
 
@@ -234,61 +342,135 @@ trigger:
 #---------------
 
 action:
-  - choose:
+  - alias: 'Synchronize the Adaptive Lighting switch with internal brightness control'
+    if:
+      - alias: 'The selected Adaptive Lighting switch exists and is available'
+        condition: template
+        value_template: >-
+          {% set adaptive_switch = in_adaptive_lighting_adapt_brightness_switch | default('', true) %}
+          {{
+            adaptive_switch != ''
+            and adaptive_switch.split('.')[0] == 'switch'
+            and states(adaptive_switch) in ['on', 'off']
+          }}
+    then:
+      - alias: 'Set the HACS switch to match the active brightness controller'
+        choose:
+          - alias: 'Disable HACS brightness while internal dynamic brightness is active'
+            conditions:
+              - alias: 'Internal brightness is enabled and the current time is inside its window'
+                condition: template
+                value_template: '{{ var_bol_internal_dynamic_brightness_active }}'
+              - alias: 'HACS brightness is currently on'
+                condition: template
+                value_template: >-
+                  {{ is_state(in_adaptive_lighting_adapt_brightness_switch, 'on') }}
+            sequence:
+              - alias: 'Turn off HACS Adaptive Lighting brightness'
+                action: switch.turn_off
+                target:
+                  entity_id: '{{ in_adaptive_lighting_adapt_brightness_switch }}'
+
+          - alias: 'Enable HACS brightness when internal brightness control is disabled'
+            conditions:
+              - alias: 'Internal brightness control is disabled'
+                condition: template
+                value_template: '{{ not (in_enable_skip_time_filter | bool) }}'
+              - alias: 'HACS brightness is currently off'
+                condition: template
+                value_template: >-
+                  {{ is_state(in_adaptive_lighting_adapt_brightness_switch, 'off') }}
+            sequence:
+              - alias: 'Turn on HACS Adaptive Lighting brightness'
+                action: switch.turn_on
+                target:
+                  entity_id: '{{ in_adaptive_lighting_adapt_brightness_switch }}'
+
+          - alias: 'Enable HACS brightness outside the internal brightness window'
+            conditions:
+              - alias: 'Internal brightness control is enabled'
+                condition: template
+                value_template: '{{ in_enable_skip_time_filter | bool }}'
+              - alias: 'Current time is outside the internal brightness window'
+                condition: template
+                value_template: '{{ not var_bol_internal_dynamic_brightness_active }}'
+              - alias: 'HACS brightness is currently off'
+                condition: template
+                value_template: >-
+                  {{ is_state(in_adaptive_lighting_adapt_brightness_switch, 'off') }}
+            sequence:
+              - alias: 'Turn on HACS Adaptive Lighting brightness'
+                action: switch.turn_on
+                target:
+                  entity_id: '{{ in_adaptive_lighting_adapt_brightness_switch }}'
+
+  - alias: 'Run the flow for the active automation trigger'
+    choose:
       #---------------
       # Case 1 - Turn ON the light when motion is detected.
       #---------------
       - alias: 'Turn ON when motion is detected or night begins'
         conditions:
-          - condition: trigger
+          - alias: 'Triggered by motion start'
+            condition: trigger
             id:
               - trigger_motion_start
 
         sequence:
-          - condition: template
-            value_template: '{{ not var_bol_away_from_home }}'
-            # Someone is home
-
-          - condition: template
-            value_template: '{{ not var_bol_stealth_mode }}'
-            # Stealth mode is not active (No ninjas)
-
-          - alias: 'Check: at least one target is OFF'
-            condition: template
-            value_template: '{{ var_bol_any_target_off_or_unavailable }}'
-
-          - condition: state
-            entity_id: !input 'in_motion_sensor'
-            state: 'on'
-            # Motion still detected
-
-          - condition: not
-            conditions:
-              - condition: time
-                after: !input 'in_clock_in_time'
-                before: !input 'in_clock_out_time'
-          # EXTRA solo fuera de rango de tiempo
-
-          # EXTERNO
-          #---------------
-          # Turn ON using dynamic brightness
-          #---------------
-          - action: script.control_dynamic_light
-            data:
-              in_target_entity_control: !input in_target_entity_control
-              in_enable_dynamic_brightness: !input in_enable_skip_time_filter
-              in_clock_start_time: !input in_clock_start_brightness
-              in_clock_end_time: !input in_clock_end_brightness
-              in_min_brightness_pct: 10
-              in_max_brightness_pct: 60
-
+          - alias: 'Check motion requirements before turning on the targets'
+            choose:
+              - alias: 'Turn ON only when motion conditions are satisfied'
+                conditions:
+                  - alias: 'Someone is home'
+                    condition: template
+                    value_template: '{{ not var_bol_away_from_home }}'
+                    # Someone is home
+                  - alias: 'Stealth mode is inactive'
+                    condition: template
+                    value_template: '{{ not var_bol_stealth_mode }}'
+                    # Stealth mode is not active (No ninjas)
+                  # Keep the brightness script reachable on motion even when all targets are already on.
+                  # - alias: 'Check: at least one target is OFF'
+                  #   condition: template
+                  #   value_template: '{{ var_bol_any_target_off_or_unavailable }}'
+                  - alias: 'Motion is still detected'
+                    condition: state
+                    entity_id: !input 'in_motion_sensor'
+                    state: 'on'
+                    # Motion still detected
+                  - alias: 'Current time is outside the quiet window'
+                    condition: not
+                    conditions:
+                      - alias: 'Current time is inside the quiet window'
+                        condition: time
+                        after: !input 'in_clock_in_time'
+                        before: !input 'in_clock_out_time'
+                  # EXTRA solo fuera de rango de tiempo
+                sequence:
+                  # EXTERNO
+                  #---------------
+                  # Turn ON using dynamic brightness
+                  #---------------
+                  - alias: 'Turn on targets using the selected brightness method'
+                    action: >-
+                      {{ var_dynamic_brightness_script }}
+                    data:
+                      in_target_entity_control: !input in_target_entity_control
+                      in_enable_dynamic_brightness: !input in_enable_skip_time_filter
+                      in_clock_start_time: !input in_clock_start_brightness
+                      in_clock_end_time: !input in_clock_end_brightness
+                      in_min_brightness_pct: !input in_min_brightness_pct
+                      in_max_brightness_pct: !input in_max_brightness_pct
+                      in_brightness_curve_gamma: !input in_brightness_curve_gamma
+                      in_light_transition_seconds: !input in_light_transition_seconds
 
       #---------------
       # Case 2 - Turn OFF when no motion is detected
       #---------------
       - alias: 'Turn OFF when no motion is detected'
         conditions:
-          - condition: trigger
+          - alias: 'Triggered by motion end'
+            condition: trigger
             id:
               - trigger_motion_end
               - trigger_motion_end_keep_alive
@@ -298,20 +480,24 @@ action:
             condition: template
             value_template: '{{ var_bol_any_target_on }}'
 
-          - condition: state
+          - alias: 'Motion sensor is off'
+            condition: state
             entity_id: !input 'in_motion_sensor'
             state: 'off'
 
-          - condition: state
+          - alias: 'Motion sensor has stayed off for the timeout'
+            condition: state
             entity_id: !input 'in_motion_sensor'
             state: 'off'
             for: !input in_inactivity_timeout
 
-          - condition: template
+          - alias: 'Keep-alive sensor is not detecting motion'
+            condition: template
             value_template: '{{ not var_bol_motion_sensor_keep_alive }}'
             # Keep-alive sensor is not detecting motion
 
-          - service: homeassistant.turn_off
+          - alias: 'Turn off targets after the no-motion timeout'
+            service: homeassistant.turn_off
             target:
               entity_id: !input 'in_target_entity_control'
 
@@ -320,7 +506,8 @@ action:
       #---------------
       - alias: '02:00 safety shutdown: turn OFF target(s)'
         conditions:
-          - condition: trigger
+          - alias: 'Triggered by the 02:00 safety timer'
+            condition: trigger
             id:
               - trigger_time_02am
         sequence:
@@ -328,7 +515,8 @@ action:
             condition: template
             value_template: '{{ var_bol_any_target_on }}'
 
-          - service: homeassistant.turn_off
+          - alias: 'Turn off targets during the daily safety shutdown'
+            service: homeassistant.turn_off
             target:
               entity_id: !input 'in_target_entity_control'
 
@@ -349,7 +537,8 @@ action:
       #---------------
       - alias: 'Post-restart SafeOff: turn OFF target(s)'
         conditions:
-          - condition: trigger
+          - alias: 'Triggered by Home Assistant startup'
+            condition: trigger
             id:
               - trigger_ha_start
         sequence:
@@ -369,7 +558,8 @@ action:
             condition: template
             value_template: '{{ var_bol_any_target_on }}'
 
-          - service: homeassistant.turn_off
+          - alias: 'Turn off targets after Home Assistant restart'
+            service: homeassistant.turn_off
             target:
               entity_id: !input 'in_target_entity_control'
 

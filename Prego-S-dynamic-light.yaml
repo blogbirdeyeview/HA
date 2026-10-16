@@ -1,153 +1,393 @@
-alias: Control Dynamic Light
-description: >-
-  Controls a group of lights with dynamic brightness when the configured lights
-  support dimming. Non-dimmable light groups are turned on normally.
+blueprint:
+  name: Prego Script - Dynamic Light Control  v4.18
+  description: >-
+    Controls selected lights with dynamic brightness when they support dimming.
+    Dimmable lights are set to 100% outside the configured time window when
+    dynamic brightness is enabled. Non-dimmable lights are turned on normally.
+  domain: script
+  homeassistant:
+    min_version: 2024.6.0
+  input:
+    lights:
+      name: Lights
+      input:
+        in_target_entity_control:
+          name: Target lights
+          description: >-
+            Lights to control. All selected lights must have the same dimming
+            capability.
+          default: []
+          selector:
+            entity:
+              domain: light
+              multiple: true
+        in_light_transition_seconds:
+          name: Light turn-on transition
+          description: Time in seconds for the light to transition to the requested state.
+          default: 2
+          selector:
+            number:
+              min: 0
+              max: 60
+              step: 1
+              mode: slider
+              unit_of_measurement: s
+    dynamic_brightness:
+      name: Dynamic brightness
+      input:
+        in_enable_dynamic_brightness:
+          name: Enable brightness control
+          description: >-
+            If enabled, calculate dynamic brightness during the configured time
+            window. Outside that window, dimmable lights are set to 100%. If
+            disabled, leave brightness unchanged.
+          default: false
+          selector:
+            boolean: {}
+        in_clock_start_time:
+          name: Dynamic light start time
+          description: Time from which dynamic brightness is enabled.
+          default: "20:00:00"
+          selector:
+            time: {}
+        in_clock_end_time:
+          name: Dynamic light end time
+          description: Time until which dynamic brightness is enabled.
+          default: "08:00:00"
+          selector:
+            time: {}
+        in_min_brightness_pct:
+          name: Minimum brightness
+          description: Minimum brightness percentage. Must be at least 1% and no higher than the maximum brightness.
+          default: 20
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: slider
+              unit_of_measurement: "%"
+        in_max_brightness_pct:
+          name: Maximum brightness
+          description: Maximum brightness percentage. Must not exceed 100% and must be at least the minimum brightness.
+          default: 100
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              mode: slider
+              unit_of_measurement: "%"
+        in_brightness_curve_gamma:
+          name: Brightness curve gamma
+          description: >-
+            Controls the non-linear brightness curve. A value of 1.0 keeps the
+            current linear behavior. Values above 1.0 dim faster as time moves
+            away from solar noon. The configured minimum and maximum remain
+            unchanged.
+          default: 1.0
+          selector:
+            number:
+              min: 0.1
+              max: 5.0
+              step: 0.1
+              mode: box
+
 fields:
   in_target_entity_control:
     name: Target lights
-    description: >-
-      Lights to control. All selected lights must have the same dimming
-      capability.
+    description: Lights passed by the calling automation. If omitted, the lights configured in this script blueprint are used.
     selector:
       entity:
         domain: light
         multiple: true
-    default: []
+  in_light_transition_seconds:
+    name: Light turn-on transition
+    description: Time in seconds for the light to transition to the requested state.
+    selector:
+      number:
+        min: 0
+        max: 60
+        step: 1
+        mode: slider
+        unit_of_measurement: s
   in_enable_dynamic_brightness:
-    name: Enable dynamic brightness
-    description: If enabled, dynamic brightness is always used regardless of the time.
-    default: false
+    name: Enable brightness control
+    description: Whether to apply dynamic brightness during the configured time window.
     selector:
       boolean: {}
   in_clock_start_time:
     name: Dynamic light start time
-    description: Time from which dynamic brightness is enabled.
-    default: '20:00:00'
+    description: Start time for dynamic brightness.
     selector:
       time: {}
   in_clock_end_time:
     name: Dynamic light end time
-    description: Time until which dynamic brightness is enabled.
-    default: '08:00:00'
+    description: End time for dynamic brightness.
     selector:
       time: {}
   in_min_brightness_pct:
     name: Minimum brightness
-    description: Minimum brightness percentage.
-    default: 20
+    description: Minimum brightness percentage. Must be at least 1% and no higher than the maximum brightness.
     selector:
       number:
-        min: 0
+        min: 1
         max: 100
         step: 1
         mode: slider
-        unit_of_measurement: '%'
+        unit_of_measurement: "%"
   in_max_brightness_pct:
     name: Maximum brightness
-    description: Maximum brightness percentage.
-    default: 100
+    description: Maximum brightness percentage. Must not exceed 100% and must be at least the minimum brightness.
     selector:
       number:
-        min: 0
+        min: 1
         max: 100
         step: 1
         mode: slider
-        unit_of_measurement: '%'
+        unit_of_measurement: "%"
+  in_brightness_curve_gamma:
+    name: Brightness curve gamma
+    description: Controls the non-linear brightness curve.
+    selector:
+      number:
+        min: 0.1
+        max: 5.0
+        step: 0.1
+        mode: box
+
+variables:
+  var_config_target_entities: !input in_target_entity_control
+  var_config_light_transition_seconds: !input in_light_transition_seconds
+  var_config_enable_dynamic_brightness: !input in_enable_dynamic_brightness
+  var_config_clock_start_time: !input in_clock_start_time
+  var_config_clock_end_time: !input in_clock_end_time
+  var_config_min_brightness_pct: !input in_min_brightness_pct
+  var_config_max_brightness_pct: !input in_max_brightness_pct
+  var_config_brightness_curve_gamma: !input in_brightness_curve_gamma
+
 sequence:
-  - variables:
-      reference_light: >-
-        {{ in_target_entity_control | default([], true) | first | default('', true) }}
+  - alias: Resolve runtime inputs from the caller or blueprint defaults
+    variables:
+      var_target_entities: >-
+        {{ in_target_entity_control if in_target_entity_control is defined else var_config_target_entities }}
+      var_input_light_transition_seconds: >-
+        {{ in_light_transition_seconds | default(var_config_light_transition_seconds, true) }}
+      var_enable_dynamic_brightness: >-
+        {{ in_enable_dynamic_brightness | default(var_config_enable_dynamic_brightness) }}
+      var_input_clock_start_time: >-
+        {{ in_clock_start_time | default(var_config_clock_start_time, true) }}
+      var_input_clock_end_time: >-
+        {{ in_clock_end_time | default(var_config_clock_end_time, true) }}
+      var_input_min_brightness_pct: >-
+        {{ in_min_brightness_pct | default(var_config_min_brightness_pct) }}
+      var_input_max_brightness_pct: >-
+        {{ in_max_brightness_pct | default(var_config_max_brightness_pct) }}
+      var_input_brightness_curve_gamma: >-
+        {{ in_brightness_curve_gamma | default(var_config_brightness_curve_gamma) }}
 
-      supported_color_modes: >-
-        {{ state_attr(reference_light, 'supported_color_modes') | default([], true) }}
-
-      is_dimmable: >-
-        {{
-          'brightness' in supported_color_modes
-          or 'color_temp' in supported_color_modes
-          or 'hs' in supported_color_modes
-          or 'xy' in supported_color_modes
-          or 'rgb' in supported_color_modes
-          or 'rgbw' in supported_color_modes
-          or 'rgbww' in supported_color_modes
-          or 'white' in supported_color_modes
-        }}
-
-      clock_start_time: >-
-        {{ in_clock_start_time | default('20:00:00', true) }}
-
-      clock_end_time: >-
-        {{ in_clock_end_time | default('08:00:00', true) }}
-
-      current_time: >-
-        {{ now().strftime('%H:%M:%S') }}
-
-  - if:
+  - alias: Skip brightness calculation when no target lights are provided
+    if:
       - condition: template
         value_template: >-
           {{
-            is_dimmable
-            and (
-              in_enable_dynamic_brightness
-              and (
-                (
-                  clock_start_time <= clock_end_time
-                  and current_time >= clock_start_time
-                  and current_time <= clock_end_time
-                )
-                or (
-                  clock_start_time > clock_end_time
-                  and (
-                    current_time >= clock_start_time
-                    or current_time <= clock_end_time
-                  )
-                )
-              )
-            )
+            var_target_entities is none
+            or (var_target_entities is string and var_target_entities | trim == '')
+            or (var_target_entities is not string and var_target_entities | count == 0)
           }}
     then:
-      - action: light.turn_on
-        target:
-          entity_id: '{{ in_target_entity_control }}'
-        data:
-          transition: 2
-          brightness_pct: >-
-            {% set noon_dt = states('sensor.sun_next_noon') | as_datetime | as_local %}
-            {% set noon_time = noon_dt.strftime('%H:%M:%S') %}
-            {% set noon_today = today_at(noon_time) %}
-            {% set t = (as_timestamp(now()) - as_timestamp(noon_today)) / 3600 %}
+      - stop: No target lights were provided; dynamic brightness was skipped.
+        error: false
 
-            {% if t > 12 %}
-              {% set t = t - 24 %}
-            {% endif %}
+  - alias: Skip brightness calculation when brightness limits are invalid
+    if:
+      - condition: template
+        value_template: >-
+          {% set minimum = var_input_min_brightness_pct | float(-1) %}
+          {% set maximum = var_input_max_brightness_pct | float(-1) %}
+          {{ minimum < 1 or maximum > 100 or minimum > maximum }}
+    then:
+      - stop: Minimum brightness must be at least 1%, maximum must be at most 100%, and minimum must not exceed maximum.
+        error: false
 
-            {% if t < -12 %}
-              {% set t = t + 24 %}
-            {% endif %}
+  - variables:
+      var_reference_light: >-
+        {{ var_target_entities | default([], true) | first | default('', true) }}
 
-            {% set raw = 100 - (t | abs) * (100 / 12) %}
-            {% set minimum = in_min_brightness_pct | float(20) %}
-            {% set maximum = in_max_brightness_pct | float(100) %}
+  - variables:
+      var_supported_color_modes: >-
+        {{ state_attr(var_reference_light, 'supported_color_modes') | default([], true) }}
 
-            {% if maximum < minimum %}
-              {% set maximum = minimum %}
-            {% endif %}
+  - variables:
+      var_bol_is_dimmable: >-
+        {{
+          'brightness' in var_supported_color_modes
+          or 'color_temp' in var_supported_color_modes
+          or 'hs' in var_supported_color_modes
+          or 'xy' in var_supported_color_modes
+          or 'rgb' in var_supported_color_modes
+          or 'rgbw' in var_supported_color_modes
+          or 'rgbww' in var_supported_color_modes
+          or 'white' in var_supported_color_modes
+        }}
 
-            {% set brightness = minimum + (raw / 100) * (maximum - minimum) %}
-            {{ [minimum, [brightness, maximum] | min] | max | round(0) }}
+  - variables:
+      var_clock_start_time: >-
+        {{ var_input_clock_start_time | default('20:00:00', true) }}
 
-    else:
-      - if:
+      var_clock_end_time: >-
+        {{ var_input_clock_end_time | default('08:00:00', true) }}
+
+      var_current_time: >-
+        {{ now().strftime('%H:%M:%S') }}
+
+  - variables:
+      var_bol_apply_dynamic_brightness: >-
+        {{
+          var_bol_is_dimmable
+          and var_enable_dynamic_brightness
+          and (
+            (
+              var_clock_start_time < var_clock_end_time
+              and var_current_time >= var_clock_start_time
+              and var_current_time < var_clock_end_time
+            )
+            or (
+              var_clock_start_time > var_clock_end_time
+              and (
+                var_current_time >= var_clock_start_time
+                or var_current_time < var_clock_end_time
+              )
+            )
+          )
+        }}
+      var_bol_apply_full_brightness: >-
+        {{ var_bol_is_dimmable and var_enable_dynamic_brightness }}
+
+  - alias: Choose the light turn-on behavior
+    choose:
+      - alias: Apply dynamic brightness
+        conditions:
           - condition: template
-            value_template: '{{ is_dimmable }}'
-        then:
-          - action: light.turn_on
-            target:
-              entity_id: '{{ in_target_entity_control }}'
+            value_template: "{{ var_bol_apply_dynamic_brightness }}"
+        sequence:
+          - alias: Capture received brightness parameters
+            variables:
+              var_received_minimum_brightness_pct: "{{ var_input_min_brightness_pct | float(20) }}"
+              var_received_maximum_brightness_pct: "{{ var_input_max_brightness_pct | float(100) }}"
+              var_received_brightness_gamma: "{{ var_input_brightness_curve_gamma | float(1.0) }}"
+              var_log_solar_noon_time: >-
+                {% set noon_dt = states('sensor.sun_next_noon') | as_datetime | as_local %}
+                {{ noon_dt.strftime('%H:%M:%S') }}
+
+          - alias: Calculate the solar-noon time offset
+            variables:
+              var_hours_from_solar_noon: >-
+                {% set noon_today = today_at(var_log_solar_noon_time) %}
+                {% set t = (as_timestamp(now()) - as_timestamp(noon_today)) / 3600 %}
+
+                {% if t > 12 %}
+                  {% set t = t - 24 %}
+                {% endif %}
+
+                {% if t < -12 %}
+                  {% set t = t + 24 %}
+                {% endif %}
+
+                {{ t }}
+              var_effective_maximum_brightness_pct: >-
+                {{ var_received_maximum_brightness_pct }}
+
+          - alias: Calculate raw and normalized brightness
+            variables:
+              var_raw_brightness_pct: >-
+                {{ 100 - (var_hours_from_solar_noon | float(0) | abs) * (100 / 12) }}
+
+          - alias: Normalize the raw brightness level
+            variables:
+              var_normalized_brightness: >-
+                {{ [0, [var_raw_brightness_pct | float(0) / 100, 1] | min] | max }}
+
+          - alias: Apply the brightness curve gamma
+            variables:
+              var_curved_brightness_factor: >-
+                {{ (var_normalized_brightness | float(0)) ** (var_received_brightness_gamma | float(1)) }}
+
+          - alias: Scale the curved brightness to the configured range
+            variables:
+              var_unrounded_brightness_pct: >-
+                {{
+                  var_received_minimum_brightness_pct
+                  + var_curved_brightness_factor
+                    * (var_effective_maximum_brightness_pct - var_received_minimum_brightness_pct)
+                }}
+
+          - alias: Clamp the calculated brightness percentage
+            variables:
+              var_calculated_brightness_pct: >-
+                {{ [1, [var_unrounded_brightness_pct | round(0) | int, 100] | min] | max }}
+
+          - alias: Log received brightness parameters and calculated level
+            action: system_log.write
             data:
-              transition: 2
-              brightness_pct: 100
-        else:
+              level: info
+              message: >-
+                Prego dynamic light calculation: received min={{ var_received_minimum_brightness_pct }}%,
+                max={{ var_received_maximum_brightness_pct }}%, gamma={{ var_received_brightness_gamma }};
+                effective max={{ var_effective_maximum_brightness_pct }}%;
+                solar-noon offset={{ var_hours_from_solar_noon | float(0) | round(2) }} h;
+                raw={{ var_raw_brightness_pct | float(0) | round(2) }}%;
+                normalized={{ var_normalized_brightness | float(0) | round(4) }};
+                gamma curve={{ var_curved_brightness_factor | float(0) | round(4) }};
+                calculated={{ var_calculated_brightness_pct }}%.
+
           - action: light.turn_on
+            alias: Turn on with dynamic brightness
             target:
-              entity_id: '{{ in_target_entity_control }}'
+              entity_id: "{{ var_target_entities }}"
+            data:
+              transition: "{{ var_input_light_transition_seconds | int(2) }}"
+              brightness_pct: "{{ var_calculated_brightness_pct }}"
+
+      - alias: Use full brightness outside the window
+        conditions:
+          - condition: template
+            value_template: "{{ var_bol_apply_full_brightness }}"
+        sequence:
+          - alias: Log full-brightness path and received parameters
+            action: system_log.write
+            data:
+              level: info
+              message: >-
+                Prego dynamic light calculation: selected full-brightness path outside the configured window;
+                enabled={{ var_enable_dynamic_brightness }}, current={{ var_current_time }},
+                window={{ var_clock_start_time }}-{{ var_clock_end_time }};
+                received min={{ var_input_min_brightness_pct }}%, max={{ var_input_max_brightness_pct }}%,
+                gamma={{ var_input_brightness_curve_gamma }}; calculated=100%.
+
+          - action: light.turn_on
+            alias: Turn on at full brightness
+            target:
+              entity_id: "{{ var_target_entities }}"
+            data:
+              transition: "{{ var_input_light_transition_seconds | int(2) }}"
+              brightness_pct: 100
+
+    default:
+      - alias: Log unchanged-brightness path and received parameters
+        action: system_log.write
+        data:
+          level: info
+          message: >-
+            Prego dynamic light calculation: selected unchanged-brightness path;
+            brightness enabled={{ var_enable_dynamic_brightness }}, dimmable={{ var_bol_is_dimmable }};
+            current={{ var_current_time }}, window={{ var_clock_start_time }}-{{ var_clock_end_time }};
+            received min={{ var_input_min_brightness_pct }}%, max={{ var_input_max_brightness_pct }}%,
+            gamma={{ var_input_brightness_curve_gamma }}; calculated=unchanged.
+
+      - action: light.turn_on
+        alias: Turn on without changing brightness
+        target:
+          entity_id: "{{ var_target_entities }}"
+        data:
+          transition: "{{ var_input_light_transition_seconds | int(2) }}"

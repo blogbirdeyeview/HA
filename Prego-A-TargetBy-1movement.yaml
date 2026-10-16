@@ -1,6 +1,6 @@
 # 2026-06-27
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection v6.6
+  name: Prego - Automatic switches/lights - By motion detection v6.7
   description: |
     Automatically controls one or more lights/switches based on a motion sensor.
     - Turns the target(s) ON when motion is detected.
@@ -142,17 +142,20 @@ variables:
 
 trigger:
   - platform: state
+    alias: Motion detected
     entity_id: !input 'in_motion_sensor'
     id: trigger_motion_start
     to: 'on'
 
   - platform: state
+    alias: No motion for the configured timeout
     entity_id: !input 'in_motion_sensor'
     id: trigger_motion_end
     to: 'off'
     for: !input in_inactivity_timeout
 
   - platform: template
+    alias: Keep-alive sensor is clear for the configured timeout
     id: trigger_motion_end_keep_alive
     value_template: >
       {% if var_motion_sensor_keep_alive is not none and var_motion_sensor_keep_alive != '' %}
@@ -163,10 +166,12 @@ trigger:
     for: !input in_inactivity_timeout
 
   - platform: time
+    alias: Daily 02:00 safety shutdown
     at: '02:00:00'
     id: trigger_time_02am
 
   - platform: homeassistant
+    alias: Home Assistant started
     event: start
     id: trigger_ha_start
 
@@ -205,21 +210,25 @@ action:
   #       - var_bol_stealth_mode: {{ var_bol_stealth_mode }}
   #       ---
 
-  - choose:
+  - alias: 'Run the flow for the active automation trigger'
+    choose:
       #---------------
       # Case 1 - Turn ON when motion is detected
       #---------------
       - alias: 'Turn ON when motion is detected'
         conditions:
-          - condition: trigger
+          - alias: 'Triggered by motion start'
+            condition: trigger
             id:
               - trigger_motion_start
         sequence:
-          - condition: template
+          - alias: 'Someone is home'
+            condition: template
             value_template: '{{ not var_bol_away_from_home }}'
             # Someone is home
 
-          - condition: template
+          - alias: 'Stealth mode is inactive'
+            condition: template
             value_template: '{{ not var_bol_stealth_mode }}'
             # Stealth mode is not active (No ninjas)
 
@@ -227,12 +236,14 @@ action:
             condition: template
             value_template: '{{ var_bol_any_target_off_or_unavailable }}'
 
-          - condition: state
+          - alias: 'Motion is still detected'
+            condition: state
             entity_id: !input 'in_motion_sensor'
             state: 'on'
             # Motion still detected
 
-          - service: homeassistant.turn_on
+          - alias: 'Turn on the target switches and lights'
+            service: homeassistant.turn_on
             target:
               entity_id: !input 'in_target_entity_control'
 
@@ -246,7 +257,8 @@ action:
       #---------------
       - alias: 'Turn OFF when no motion is detected'
         conditions:
-          - condition: trigger
+          - alias: 'Triggered by motion end'
+            condition: trigger
             id:
               - trigger_motion_end
               - trigger_motion_end_keep_alive
@@ -255,20 +267,24 @@ action:
             condition: template
             value_template: '{{ var_bol_any_target_on }}'
 
-          - condition: state
+          - alias: 'Motion sensor is off'
+            condition: state
             entity_id: !input 'in_motion_sensor'
             state: 'off'
 
-          - condition: state
+          - alias: 'Motion sensor has stayed off for the timeout'
+            condition: state
             entity_id: !input 'in_motion_sensor'
             state: 'off'
             for: !input in_inactivity_timeout
 
-          - condition: template
+          - alias: 'Keep-alive sensor is not detecting motion'
+            condition: template
             value_template: '{{ not var_bol_motion_sensor_keep_alive }}'
             # Keep-alive sensor is not detecting motion
 
-          - service: homeassistant.turn_off
+          - alias: 'Turn off the targets after the no-motion timeout'
+            service: homeassistant.turn_off
             target:
               entity_id: !input 'in_target_entity_control'
 
@@ -282,7 +298,8 @@ action:
       #---------------
       - alias: '02:00 safety shutdown: turn OFF target(s)'
         conditions:
-          - condition: trigger
+          - alias: 'Triggered by the 02:00 safety timer'
+            condition: trigger
             id:
               - trigger_time_02am
         sequence:
@@ -290,7 +307,8 @@ action:
             condition: template
             value_template: '{{ var_bol_any_target_on }}'
 
-          - service: homeassistant.turn_off
+          - alias: 'Turn off targets during the daily safety shutdown'
+            service: homeassistant.turn_off
             target:
               entity_id: !input 'in_target_entity_control'
 
@@ -311,7 +329,8 @@ action:
       #---------------
       - alias: 'Post-restart SafeOff: turn OFF target(s)'
         conditions:
-          - condition: trigger
+          - alias: 'Triggered by Home Assistant startup'
+            condition: trigger
             id:
               - trigger_ha_start
         sequence:
@@ -331,7 +350,8 @@ action:
             condition: template
             value_template: '{{ var_bol_any_target_on }}'
 
-          - service: homeassistant.turn_off
+          - alias: 'Turn off targets after Home Assistant restart'
+            service: homeassistant.turn_off
             target:
               entity_id: !input 'in_target_entity_control'
 

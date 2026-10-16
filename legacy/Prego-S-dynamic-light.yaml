@@ -1,0 +1,155 @@
+alias: Control Dynamic Light
+description: >-
+  Controls a group of lights with dynamic brightness when the configured lights
+  support dimming. Non-dimmable light groups are turned on normally.
+fields:
+  in_target_entity_control:
+    name: Target lights
+    description: >-
+      Lights to control. All selected lights must have the same dimming
+      capability.
+    selector:
+      entity:
+        domain: light
+        multiple: true
+    default: []
+  in_enable_dynamic_brightness:
+    name: Enable brightness control
+    description: If enabled, calculate dynamic brightness during the configured time window. Outside that window, dimmable lights are set to 100%. If disabled, leave brightness unchanged.
+    default: false
+    selector:
+      boolean: {}
+  in_clock_start_time:
+    name: Dynamic light start time
+    description: Time from which dynamic brightness is enabled.
+    default: '20:00:00'
+    selector:
+      time: {}
+  in_clock_end_time:
+    name: Dynamic light end time
+    description: Time until which dynamic brightness is enabled.
+    default: '08:00:00'
+    selector:
+      time: {}
+  in_min_brightness_pct:
+    name: Minimum brightness
+    description: Minimum brightness percentage.
+    default: 20
+    selector:
+      number:
+        min: 0
+        max: 100
+        step: 1
+        mode: slider
+        unit_of_measurement: '%'
+  in_max_brightness_pct:
+    name: Maximum brightness
+    description: Maximum brightness percentage.
+    default: 100
+    selector:
+      number:
+        min: 0
+        max: 100
+        step: 1
+        mode: slider
+        unit_of_measurement: '%'
+sequence:
+  - variables:
+      reference_light: >-
+        {{ in_target_entity_control | default([], true) | first | default('', true) }}
+
+      supported_color_modes: >-
+        {{ state_attr(reference_light, 'supported_color_modes') | default([], true) }}
+
+      is_dimmable: >-
+        {{
+          'brightness' in supported_color_modes
+          or 'color_temp' in supported_color_modes
+          or 'hs' in supported_color_modes
+          or 'xy' in supported_color_modes
+          or 'rgb' in supported_color_modes
+          or 'rgbw' in supported_color_modes
+          or 'rgbww' in supported_color_modes
+          or 'white' in supported_color_modes
+        }}
+
+      clock_start_time: >-
+        {{ in_clock_start_time | default('20:00:00', true) }}
+
+      clock_end_time: >-
+        {{ in_clock_end_time | default('08:00:00', true) }}
+
+      current_time: >-
+        {{ now().strftime('%H:%M:%S') }}
+
+  - if:
+      - condition: template
+        value_template: >-
+          {{
+            is_dimmable
+            and (
+              in_enable_dynamic_brightness
+              and (
+                (
+                  clock_start_time <= clock_end_time
+                  and current_time >= clock_start_time
+                  and current_time <= clock_end_time
+                )
+                or (
+                  clock_start_time > clock_end_time
+                  and (
+                    current_time >= clock_start_time
+                    or current_time <= clock_end_time
+                  )
+                )
+              )
+            )
+          }}
+    then:
+      - action: light.turn_on
+        target:
+          entity_id: '{{ in_target_entity_control }}'
+        data:
+          transition: 2
+          brightness_pct: >-
+            {% set noon_dt = states('sensor.sun_next_noon') | as_datetime | as_local %}
+            {% set noon_time = noon_dt.strftime('%H:%M:%S') %}
+            {% set noon_today = today_at(noon_time) %}
+            {% set t = (as_timestamp(now()) - as_timestamp(noon_today)) / 3600 %}
+
+            {% if t > 12 %}
+              {% set t = t - 24 %}
+            {% endif %}
+
+            {% if t < -12 %}
+              {% set t = t + 24 %}
+            {% endif %}
+
+            {% set raw = 100 - (t | abs) * (100 / 12) %}
+            {% set minimum = in_min_brightness_pct | float(20) %}
+            {% set maximum = in_max_brightness_pct | float(100) %}
+
+            {% if maximum < minimum %}
+              {% set maximum = minimum %}
+            {% endif %}
+
+            {% set brightness = minimum + (raw / 100) * (maximum - minimum) %}
+            {{ [minimum, [brightness, maximum] | min] | max | round(0) }}
+
+    else:
+      - if:
+          - condition: template
+            value_template: '{{ is_dimmable and in_enable_dynamic_brightness }}'
+        then:
+          - action: light.turn_on
+            target:
+              entity_id: '{{ in_target_entity_control }}'
+            data:
+              transition: 2
+              brightness_pct: 100
+        else:
+          - action: light.turn_on
+            target:
+              entity_id: '{{ in_target_entity_control }}'
+            data:
+              transition: 2
