@@ -1,7 +1,7 @@
 # Basado en Prego-A-TargetBy-movement-sun.yaml
 # 2026-07-02
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & sun - rank of time v3.22
+  name: Prego - Automatic switches/lights - By motion detection & sun - rank of time v3.23
   description: |
     Automatically controls one or more lights/switches using a motion sensor and a configurable time window based on sunlight and schedules.
 
@@ -134,39 +134,39 @@ variables:
     {% else %}
       {{ is_state(var_motion_sensor_keep_alive, 'on') | bool }}
     {% endif %}
-
+  #--- Block-var
   var_bol_away_from_home: >
     {% if not var_away_from_home %}
       {{ false }}
     {% else %}
       {{ is_state(var_away_from_home, 'on') | bool }}
     {% endif %}
-
+  #--- Block-var
   var_bol_stealth_mode: >
     {% if not var_stealth_mode or (var_stealth_mode | length == 0) %}
       {{ false }}
     {% else %}
-      {{
-        (expand(var_stealth_mode)
-        | selectattr('state', 'eq', 'on')
-        | list
-        | count > 0)
-        | bool
-      }}
+    {{
+      (expand(var_stealth_mode)
+      | selectattr('state', 'eq', 'on')
+      | list
+      | count > 0)
+      | bool
+    }}
     {% endif %}
-
+  #--- Block-var
   var_bol_any_target_on: >-
     {{ expand(var_target_entities)
     | selectattr('state', 'eq', 'on')
     | list
     | count > 0 }}
-
+  #--- Block-var
   var_bol_any_target_off_or_unavailable: >-
     {{ expand(var_target_entities)
     | selectattr('state', 'in', ['off', 'unavailable', 'unknown'])
     | list
     | count > 0 }}
-
+  #--- Block-var
   var_target_entities_on_names: >-
     {% set ns = namespace(items=[]) %}
     {% for entity in expand(var_target_entities) if entity.state == 'on' %}
