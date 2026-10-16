@@ -202,11 +202,11 @@ actions:
       morning_base_ts: >
         {% set offset_seconds = var_base_offset_morning_minutes * 60 %}
         {{ as_timestamp(var_sunrise_time) + offset_seconds }}
-
+      #--- Block-var
       night_base_ts: >
         {% set offset_seconds = var_base_offset_afternoon_minutes * 60 %}
         {{ as_timestamp(var_sunset_time) - offset_seconds }}
-
+      #--- Block-var
       total_adjustment_seconds: >
         {% set ldr_offset_minutes = 1 + (var_extra_ldr_time * ((100 - var_ldr) / 100)) %}
         {% set sun_reference = [var_max_sun_elevation_yesterday | float(0), 1] | max %}

@@ -119,12 +119,14 @@ variables:
     {% else %}
       {{ is_state(var_motion_sensor_keep_alive, 'on') | bool }}
     {% endif %}
+  #--- Block-var
   var_bol_away_from_home: >
     {% if not var_away_from_home %}
       {{ false }}
     {% else %}
       {{ is_state(var_away_from_home, 'on') | bool }}
     {% endif %}
+  #--- Block-var
   var_bol_stealth_mode: >
     {% if not var_stealth_mode or (var_stealth_mode | length == 0) %}
       {{ false }}
@@ -137,16 +139,19 @@ variables:
       | bool
     }}
     {% endif %}
+  #--- Block-var
   var_bol_any_target_on: >-
     {{ expand(var_target_entities)
     | selectattr('state', 'eq', 'on')
     | list
     | count > 0 }}
+  #--- Block-var
   var_bol_any_target_off_or_unavailable: >-
     {{ expand(var_target_entities)
     | selectattr('state', 'in', ['off', 'unavailable', 'unknown'])
     | list
     | count > 0 }}
+  #--- Block-var
   var_target_entities_on_names: >-
     {% set ns = namespace(items=[]) %}
     {% for entity in expand(var_target_entities) if entity.state == 'on' %}
