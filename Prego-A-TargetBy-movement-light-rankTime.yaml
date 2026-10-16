@@ -5,7 +5,7 @@
 
 # 2026-10-11
 blueprint:
-  name: Prego - Automatic lights - By motion detection - rank of time v2.17
+  name: Prego - Automatic lights - By motion detection - rank of time v2.19
   description: |
     Automatically controls one or more lights using a motion sensor and a configurable quiet/sleep time window.
 
@@ -162,7 +162,7 @@ blueprint:
               max: 100
               step: 1
               mode: slider
-              unit_of_measurement: "%"
+              unit_of_measurement: '%'
 
         in_max_brightness_pct:
           name: Maximum dynamic brightness
@@ -174,7 +174,7 @@ blueprint:
               max: 100
               step: 1
               mode: slider
-              unit_of_measurement: "%"
+              unit_of_measurement: '%'
 
         in_brightness_curve_gamma:
           name: Internal dynamic brightness curve gamma
@@ -232,6 +232,7 @@ variables:
   in_dynamic_brightness_script: !input in_dynamic_brightness_script
   var_dynamic_brightness_script: >-
     {{ in_dynamic_brightness_script | default('script.prego_script_dynamic_light_control_v4_18_2', true) }}
+  #--- Block-var
   var_bol_internal_dynamic_brightness_active: >-
     {% set current_time = now().strftime('%H:%M:%S') %}
     {% set start_time = in_clock_start_brightness %}
@@ -243,18 +244,21 @@ variables:
         or (start_time > end_time and (current_time >= start_time or current_time < end_time))
       )
     }}
+  #--- Block-var
   var_bol_motion_sensor_keep_alive: >
     {% if not var_motion_sensor_keep_alive %}
       {{ false }}
     {% else %}
       {{ is_state(var_motion_sensor_keep_alive, 'on') | bool }}
     {% endif %}
+  #--- Block-var
   var_bol_away_from_home: >
     {% if not var_away_from_home %}
       {{ false }}
     {% else %}
       {{ is_state(var_away_from_home, 'on') | bool }}
     {% endif %}
+  #--- Block-var
   var_bol_stealth_mode: >
     {% if not var_stealth_mode or (var_stealth_mode | length == 0) %}
       {{ false }}
@@ -267,16 +271,19 @@ variables:
       | bool
     }}
     {% endif %}
+  #--- Block-var
   var_bol_any_target_on: >-
     {{ expand(var_target_entities)
     | selectattr('state', 'eq', 'on')
     | list
     | count > 0 }}
+  #--- Block-var
   var_bol_any_target_off_or_unavailable: >-
     {{ expand(var_target_entities)
     | selectattr('state', 'in', ['off', 'unavailable', 'unknown'])
     | list
     | count > 0 }}
+  #--- Block-var
   var_target_entities_on_names: >-
     {% set ns = namespace(items=[]) %}
     {% for entity in expand(var_target_entities) if entity.state == 'on' %}

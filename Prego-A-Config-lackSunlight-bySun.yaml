@@ -1,6 +1,6 @@
 # 2026-06-28
 blueprint:
-  name: Prego - Config Lack of sunlight - By sun prego v0.14
+  name: Prego - Config Lack of sunlight - By sun prego v0.15
   description: >
     Config - defines the boolean for the lack of light, guided by the sunrise and sunset settings -- lack of sunlight.
     The automation also reacts when the configured sunrise or sunset helper values change.
@@ -70,6 +70,7 @@ variables:
     {% else %}
       {{ is_state(var_away_from_home, 'on') | bool }}
     {% endif %}
+  #--- Block-var
   var_bol_stealth_mode: >
     {% if not var_stealth_mode or (var_stealth_mode | length == 0) %}
       {{ false }}

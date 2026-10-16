@@ -1,8 +1,8 @@
 # Basado en Prego-A-TargetBy-movement-sun.yaml
-# 2025-12-03
+# 2026-10-16
 # USO - Miguel
 blueprint:
-  name: Prego - Automatic switches/lights custom - By motion detection & sun v1.26
+  name: Prego - Automatic switches/lights custom - By motion detection & sun v1.28
   description: |
     Automatically controls one or more lights/switches using a motion sensor and a night/day schedule (sunset/sunrise helpers). (custom light switch ON by script)
 
@@ -14,9 +14,11 @@ blueprint:
     * Optional "keep-alive" motion sensor prevents turning OFF if motion is still present.
     * Optional "away-from-home" filter prevents turning ON while no one is home.
     * Optional "stealth-mode" filter prevents turning ON while one or more stealth flags are active.
+
   domain: automation
   homeassistant:
-    min_version: 2024.6.0
+    min_version: 2026.6.0
+
   # Tab necesario por inputs
   #
   #---------------
@@ -90,6 +92,20 @@ blueprint:
       selector:
         boolean:
 
+    in_clock_in_time:
+      name: Start of period without light time (23:00:00)
+      description: From what time will this automation work?
+      default: '23:00:00'
+      selector:
+        time: {}
+
+    in_clock_out_time:
+      name: End of period without light time (07:00:00)
+      description: Until what time will this automation work?
+      default: '07:00:00'
+      selector:
+        time: {}
+
     #*** Targets
     in_target_entity_control:
       name: Target switch/light to control
@@ -125,12 +141,14 @@ variables:
     {% else %}
       {{ is_state(var_motion_sensor_keep_alive, 'on') | bool }}
     {% endif %}
+
   var_bol_away_from_home: >
     {% if not var_away_from_home %}
       {{ false }}
     {% else %}
       {{ is_state(var_away_from_home, 'on') | bool }}
     {% endif %}
+
   var_bol_stealth_mode: >
     {% if not var_stealth_mode or (var_stealth_mode | length == 0) %}
       {{ false }}
@@ -143,16 +161,19 @@ variables:
       | bool
     }}
     {% endif %}
+
   var_bol_any_target_on: >-
     {{ expand(var_target_entities)
     | selectattr('state', 'eq', 'on')
     | list
     | count > 0 }}
+
   var_bol_any_target_off_or_unavailable: >-
     {{ expand(var_target_entities)
     | selectattr('state', 'in', ['off', 'unavailable', 'unknown'])
     | list
     | count > 0 }}
+
   var_target_entities_on_names: >-
     {% set ns = namespace(items=[]) %}
     {% for entity in expand(var_target_entities) if entity.state == 'on' %}

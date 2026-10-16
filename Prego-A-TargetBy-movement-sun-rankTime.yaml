@@ -9,12 +9,11 @@ blueprint:
     - Turns the target(s) OFF after a configurable no-motion timeout.
     - Turns the target(s) OFF when the configured window ends (if there is no motion).
     - Turns the target(s) OFF at 02:00 as a daily safety shutdown (if any target is ON).
-    - Allows a manual trigger/button/device event to toggle the target(s).
 
     * Optional "keep-alive" motion sensor prevents turning OFF if motion is still present.
     * Optional "away-from-home" filter prevents turning ON while no one is home.
     * Optional "stealth-mode" filter prevents turning ON while one or more stealth flags are active.
-    * Optional manual trigger can be a device trigger, for example a ZHA short press.
+
   domain: automation
   homeassistant:
     min_version: 2026.6.0
