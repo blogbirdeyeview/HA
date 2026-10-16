@@ -511,6 +511,31 @@ action:
               entity_id: !input 'in_target_entity_control'
 
       #---------------
+      # Case 3 - To turn OFF the light when it is daytime.
+      #---------------
+      - alias: 'Turn off the target - it is already morning!'
+        conditions:
+          - condition: trigger
+            id:
+              - trigger_time_morning
+
+        sequence:
+          - alias: 'Check: at least one target is ON'
+            condition: template
+            value_template: '{{ var_bol_any_target_on }}'
+
+          - condition: state
+            entity_id: !input 'in_motion_sensor'
+            state: 'off'
+
+          - condition: template
+            value_template: '{{ not var_bol_motion_sensor_keep_alive }}'
+
+          - service: homeassistant.turn_off
+            target:
+              entity_id: !input 'in_target_entity_control'
+
+      #---------------
       # Case SAFE - Daily safety shutdown at 02:00
       #---------------
       - alias: '02:00 safety shutdown: turn OFF target(s)'
