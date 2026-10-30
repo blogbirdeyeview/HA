@@ -1,5 +1,5 @@
 blueprint:
-  name: Prego Script - Dynamic Light Control  v5.24
+  name: Prego Script - Dynamic Light Control  v5.25
   description: >-
     Turns on selected switches or lights. Lights receive dynamic brightness
     when enabled and supported; switches are turned on without brightness data.
@@ -439,9 +439,7 @@ sequence:
             received min={{ var_min_brightness_pct }}%, max={{ var_max_brightness_pct }}%,
             gamma={{ var_brightness_curve_gamma }}; 
             calculated=unchanged.
-          - service: homeassistant.turn_on
-            target:
-              entity_id: !input 'in_target_entity_control'
+
       - action: light.turn_on
         alias: Turn on without changing brightness
         target:
