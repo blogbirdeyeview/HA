@@ -1,11 +1,14 @@
-# Basado en Prego-A-TargetBy-movement-sun-rankTime.yaml
+# Basado en Prego-A-TargetBy-movement-light-rankTime.yaml
 # El cual es basado en:
 # Basado en Prego-A-TargetBy-movement-sun.yaml
 # IMPORTANT: depends on an instance of Prego-S-dynamic-light.yaml (default: script.prego_dynamic_light_control_v4_XX)
 
+# TO deprecate
+# Modificar para usar Prego-A-TargetBy-brightness-sun-rankTime.yaml
+
 # 2026-10-11
 blueprint:
-  name: Prego - Automatic lights - By motion detection - rank of time v2.20
+  name: Prego - Automatic lights - By motion detection - rank of time v2.22
   description: |
     Automatically controls one or more lights using a motion sensor and a configurable quiet/sleep time window.
 
@@ -154,11 +157,13 @@ blueprint:
 
         in_min_brightness_pct:
           name: Minimum dynamic brightness
-          description: Minimum brightness percentage. Must be at least 1% and no higher than the maximum brightness.
-          default: 20
+          description: >-
+            Minimum brightness percentage. Use 0 to inherit the value
+            configured in the selected dynamic brightness script.
+          default: 0
           selector:
             number:
-              min: 1
+              min: 0
               max: 100
               step: 1
               mode: slider
@@ -166,11 +171,13 @@ blueprint:
 
         in_max_brightness_pct:
           name: Maximum dynamic brightness
-          description: Maximum brightness percentage. Must not exceed 100% and must be at least the minimum brightness.
-          default: 100
+          description: >-
+            Maximum brightness percentage. Use 0 to inherit the value
+            configured in the selected dynamic brightness script.
+          default: 0
           selector:
             number:
-              min: 1
+              min: 0
               max: 100
               step: 1
               mode: slider
@@ -193,8 +200,11 @@ blueprint:
 
         in_light_transition_seconds:
           name: Light turn-on transition
-          description: Time in seconds for the light to transition to the requested state.
-          default: 2
+          description: >-
+            Time in seconds for the light to transition to the requested state.
+            Use 0 to inherit the value configured in the selected dynamic
+            brightness script.
+          default: 0
           selector:
             number:
               min: 0

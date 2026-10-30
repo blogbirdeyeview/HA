@@ -91,6 +91,7 @@ blueprint:
       selector:
         boolean:
 
+    # Motion/light activation quiet window
     in_clock_in_time:
       name: Start of period without light time (23:00:00)
       description: From what time will this automation work?

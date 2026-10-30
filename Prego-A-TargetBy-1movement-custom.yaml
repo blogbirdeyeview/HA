@@ -2,7 +2,7 @@
 # 2025-12-12
 # USO - Miguel
 blueprint:
-  name: Prego - Automatic switches/lights custom - By motion detection v1.11
+  name: Prego - Automatic switches/lights custom - By motion detection v1.12
   description: |
     Automatically controls one or more lights/switches using a motion sensor. (custom light switch ON by script)
 
@@ -155,17 +155,20 @@ variables:
 
 trigger:
   - platform: state
+    alias: Motion detected
     entity_id: !input 'in_motion_sensor'
     id: trigger_motion_start
     to: 'on'
 
   - platform: state
+    alias: No motion for the configured timeout
     entity_id: !input 'in_motion_sensor'
     id: trigger_motion_end
     to: 'off'
     for: !input in_inactivity_timeout
 
   - platform: template
+    alias: Keep-alive sensor is clear for the configured timeout
     id: trigger_motion_end_keep_alive
     value_template: >
       {% if var_motion_sensor_keep_alive is not none and var_motion_sensor_keep_alive != '' %}
@@ -176,10 +179,12 @@ trigger:
     for: !input in_inactivity_timeout
 
   - platform: time
+    alias: Daily 02:00 safety shutdown
     at: '02:00:00'
     id: trigger_time_02am
 
   - platform: homeassistant
+    alias: Home Assistant started
     event: start
     id: trigger_ha_start
 
@@ -310,7 +315,8 @@ action:
       #---------------
       - alias: 'Post-restart SafeOff: turn OFF target(s)'
         conditions:
-          - condition: trigger
+          - alias: 'Triggered by Home Assistant startup'
+            condition: trigger
             id:
               - trigger_ha_start
         sequence:
@@ -330,7 +336,8 @@ action:
             condition: template
             value_template: '{{ var_bol_any_target_on }}'
 
-          - service: homeassistant.turn_off
+          - alias: 'Turn off targets after Home Assistant restart'
+            service: homeassistant.turn_off
             target:
               entity_id: !input 'in_target_entity_control'
 
