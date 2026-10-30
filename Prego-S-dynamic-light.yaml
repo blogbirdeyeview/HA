@@ -1,12 +1,12 @@
 blueprint:
-  name: Prego Script - Dynamic Light Control  v5.23
+  name: Prego Script - Dynamic Light Control  v5.24
   description: >-
     Turns on selected switches or lights. Lights receive dynamic brightness
     when enabled and supported; switches are turned on without brightness data.
   domain: script
   homeassistant:
-    min_version: 2024.6.0
-  # Tab necesario por inputs
+    min_version: 2026.6.0
+  # Required section for inputs
   #
   #---------------
   # Inputs
@@ -316,6 +316,9 @@ sequence:
 
   - alias: Choose the light turn-on behavior
     choose:
+      #---------------
+      # Case 1 - Turn ON the light internal Prego case.
+      #---------------
       - alias: Apply dynamic brightness
         conditions:
           - condition: template
@@ -393,6 +396,9 @@ sequence:
               transition: '{{ var_light_transition_seconds | int(2) }}'
               brightness_pct: '{{ var_calculated_brightness_pct }}'
 
+      #---------------
+      # Case 2 - Turn ON the light.
+      #---------------
       - alias: Use full brightness outside the window
         conditions:
           - condition: template
@@ -404,10 +410,11 @@ sequence:
               level: info
               message: >-
                 Prego dynamic light calculation: selected full-brightness path outside the configured window;
-                enabled={{ var_bol_enable_dynamic_brightness }}, current={{ var_current_time }},
-                window={{ var_clock_start_time }}-{{ var_clock_end_time }};
+                brightness enabled={{ var_bol_enable_dynamic_brightness }}, dimmable={{ var_bol_is_dimmable }};
+                current={{ var_current_time }}, window={{ var_clock_start_time }}-{{ var_clock_end_time }};
                 received min={{ var_min_brightness_pct }}%, max={{ var_max_brightness_pct }}%,
-                gamma={{ var_brightness_curve_gamma }}; calculated=100%.
+                gamma={{ var_brightness_curve_gamma }}; 
+                calculated=unchanged on purpose.
 
           - action: light.turn_on
             alias: Turn on at full brightness
@@ -415,7 +422,11 @@ sequence:
               entity_id: '{{ var_target_entities }}'
             data:
               transition: '{{ var_light_transition_seconds | int(2) }}'
+              #brightness_pct: 100
 
+    #---------------
+    # Save case - Turn ON the light.
+    #---------------
     default:
       - alias: Log unchanged-brightness path and received parameters
         action: system_log.write
@@ -426,11 +437,12 @@ sequence:
             brightness enabled={{ var_bol_enable_dynamic_brightness }}, dimmable={{ var_bol_is_dimmable }};
             current={{ var_current_time }}, window={{ var_clock_start_time }}-{{ var_clock_end_time }};
             received min={{ var_min_brightness_pct }}%, max={{ var_max_brightness_pct }}%,
-            gamma={{ var_brightness_curve_gamma }}; calculated=unchanged.
-
+            gamma={{ var_brightness_curve_gamma }}; 
+            calculated=unchanged.
+          - service: homeassistant.turn_on
+            target:
+              entity_id: !input 'in_target_entity_control'
       - action: light.turn_on
         alias: Turn on without changing brightness
         target:
           entity_id: '{{ var_target_entities }}'
-        data:
-          transition: '{{ var_light_transition_seconds | int(2) }}'
