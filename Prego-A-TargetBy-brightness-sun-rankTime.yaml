@@ -6,13 +6,13 @@
 
 # 2026-10-30
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.45
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.46
   description: |
     Automatically controls one or more switches/lights using a motion sensor and sunlight and a configurable quiet/sleep time window.
 
-    - Turns the target(s) ON when motion is detected outside the configured quiet window. If no quiet window is configured, it can remain active all day.
+    - Turns the target(s) ON when motion is detected outside the configured quiet window.
     - Turns the target(s) OFF after a configurable no-motion timeout.
-    - Turns the target(s) OFF when the configured quiet window starts (if there is no motion).
+    - Optional quiet-window boundary actions are disabled by default. When enabled, targets turn OFF at the start if there is no motion and turn ON at the end if motion is detected.
     - Turns the target(s) OFF at 02:00 as a daily safety shutdown (if any target is ON).
     - Brightness control can be disabled, managed internally during a configured time window, or delegated to HACS Adaptive Lighting. This applies to light targets only.
 
@@ -83,20 +83,35 @@ blueprint:
       selector:
         boolean:
 
-    # Motion/light activation quiet window
-    in_quiet_window_start:
-      name: Quiet window start (23:00:00)
-      description: When the quiet window starts. While it is active, motion does not turn on the targets.
-      default: '23:00:00'
-      selector:
-        time: {}
+    quiet_window_schedule:
+      name: Quiet window schedule
+      icon: mdi:clock-outline
+      description: >
+        Set when the quiet window starts and ends, and optionally run an action at each boundary.
+      collapsed: false
+      input:
+        # Motion activation quiet window
+        in_enable_quiet_window_boundary_actions:
+          name: Enable quiet-window boundary actions
+          description: When enabled, turn targets off at the start if there is no motion and turn them on at the end if motion is detected.
+          default: false
+          selector:
+            boolean: {}
 
-    in_quiet_window_end:
-      name: Quiet window end (07:00:00)
-      description: When the quiet window ends. Motion can turn on the targets again after this time.
-      default: '07:00:00'
-      selector:
-        time: {}
+        # Motion config quiet window
+        in_quiet_window_start:
+          name: Quiet window start (23:00:00)
+          description: When the quiet window starts. While it is active, motion does not turn on the targets.
+          default: '23:00:00'
+          selector:
+            time: {}
+
+        in_quiet_window_end:
+          name: Quiet window end (07:00:00)
+          description: When the quiet window ends. Motion can turn on the targets again after this time.
+          default: '07:00:00'
+          selector:
+            time: {}
 
     # ─────────────────────────────
     # Internal brightness control
@@ -236,11 +251,13 @@ trigger_variables:
   var_target_entities: !input in_target_entity_control
 
 variables:
+  in_enable_quiet_window_boundary_actions: !input in_enable_quiet_window_boundary_actions
   in_enable_internal_dynamic_brightness: !input in_enable_internal_dynamic_brightness
   in_adaptive_lighting_adapt_brightness_switch: !input in_adaptive_lighting_adapt_brightness_switch
   in_clock_start_brightness: !input in_clock_start_brightness
   in_clock_end_brightness: !input in_clock_end_brightness
   in_dynamic_brightness_script: !input in_dynamic_brightness_script
+  var_target_action: 'none'
   var_dynamic_brightness_script: >-
     {{ in_dynamic_brightness_script | default('script.prego_script_dynamic_light_control_v4_18_2', true) }}
   #--- Block-var
@@ -330,6 +347,16 @@ trigger:
         false
       {% endif %}
     for: !input in_inactivity_timeout
+
+  - platform: time
+    alias: Quiet window starts
+    at: !input in_quiet_window_start
+    id: trigger_quiet_window_start
+
+  - platform: time
+    alias: Quiet window ends
+    at: !input in_quiet_window_end
+    id: trigger_quiet_window_end
 
   - platform: time
     alias: Daily 02:00 safety shutdown
@@ -422,8 +449,66 @@ action:
                 target:
                   entity_id: '{{ in_adaptive_lighting_adapt_brightness_switch }}'
 
-  - alias: 'Run the flow for the active automation trigger'
+    #---------------
+    # Resolve requested target action
+    #---------------
+  - alias: 'Resolve the target action for the active trigger'
     choose:
+      #---------------
+      # Scheduled actions at quiet-window boundaries
+      #---------------
+      - alias: 'Turn OFF at quiet-window start when there is no motion'
+        conditions:
+          - alias: 'Triggered by quiet-window start'
+            condition: trigger
+            id:
+              - trigger_quiet_window_start
+          - alias: 'Quiet-window boundary actions are enabled'
+            condition: template
+            value_template: '{{ in_enable_quiet_window_boundary_actions | bool }}'
+        sequence:
+          - alias: 'Motion sensor is clear'
+            condition: state
+            entity_id: !input in_motion_sensor
+            state: 'off'
+
+          - alias: 'Keep-alive sensor is not detecting motion'
+            condition: template
+            value_template: '{{ not var_bol_motion_sensor_keep_alive }}'
+
+          - alias: 'At least one target is ON'
+            condition: template
+            value_template: '{{ var_bol_any_target_on }}'
+
+          - variables:
+              var_target_action: 'turn_off'
+
+      - alias: 'Turn ON at quiet-window end when motion is detected'
+        conditions:
+          - alias: 'Triggered by quiet-window end'
+            condition: trigger
+            id:
+              - trigger_quiet_window_end
+          - alias: 'Quiet-window boundary actions are enabled'
+            condition: template
+            value_template: '{{ in_enable_quiet_window_boundary_actions | bool }}'
+        sequence:
+          - alias: 'Motion sensor is detecting motion'
+            condition: state
+            entity_id: !input in_motion_sensor
+            state: 'on'
+
+          - alias: 'Someone is home'
+            condition: template
+            value_template: '{{ not var_bol_away_from_home }}'
+
+          - alias: 'Stealth mode is inactive'
+            condition: template
+            value_template: '{{ not var_bol_stealth_mode }}'
+
+          - variables:
+              var_target_action: 'turn_on'
+
       #---------------
       # Case 1 - Turn ON the light when motion is detected.
       #---------------
@@ -467,22 +552,8 @@ action:
                         before: !input 'in_quiet_window_end'
                   # Extra: only outside the configured time range
                 sequence:
-                  # External
-                  #---------------
-                  # Turn ON using dynamic brightness
-                  #---------------
-                  - alias: 'Turn on targets using the selected brightness method'
-                    action: >-
-                      {{ var_dynamic_brightness_script }}
-                    data:
-                      in_target_entity_control: !input in_target_entity_control
-                      in_enable_internal_dynamic_brightness: !input in_enable_internal_dynamic_brightness
-                      in_clock_start_time: !input in_clock_start_brightness
-                      in_clock_end_time: !input in_clock_end_brightness
-                      in_min_brightness_pct: !input in_min_brightness_pct
-                      in_max_brightness_pct: !input in_max_brightness_pct
-                      in_brightness_curve_gamma: !input in_brightness_curve_gamma
-                      in_light_transition_seconds: !input in_light_transition_seconds
+                  - variables:
+                      var_target_action: 'turn_on'
 
       #---------------
       # Case 2 - Turn OFF when no motion is detected
@@ -516,10 +587,8 @@ action:
             value_template: '{{ not var_bol_motion_sensor_keep_alive }}'
             # Keep-alive sensor is not detecting motion
 
-          - alias: 'Turn off targets after the no-motion timeout'
-            service: homeassistant.turn_off
-            target:
-              entity_id: !input 'in_target_entity_control'
+          - variables:
+              var_target_action: 'turn_off'
 
       #---------------
       # Case 3 - To turn OFF the light when it is daytime.
@@ -542,9 +611,8 @@ action:
           - condition: template
             value_template: '{{ not var_bol_motion_sensor_keep_alive }}'
 
-          - service: homeassistant.turn_off
-            target:
-              entity_id: !input 'in_target_entity_control'
+          - variables:
+              var_target_action: 'turn_off'
 
       #---------------
       # Case SAFE - Daily safety shutdown at 02:00
@@ -560,22 +628,8 @@ action:
             condition: template
             value_template: '{{ var_bol_any_target_on }}'
 
-          - alias: 'Turn off targets during the daily safety shutdown'
-            service: homeassistant.turn_off
-            target:
-              entity_id: !input 'in_target_entity_control'
-
-          - alias: 'Notify: safety shutdown executed'
-            service: persistent_notification.create
-            data:
-              title: >-
-                02:00 safety shutdown executed - 
-                {{ state_attr(this.entity_id, 'friendly_name') if this is defined and this.entity_id is defined else 'unknown automation' }}
-              message: >-
-                Automation: {{ state_attr(this.entity_id, 'friendly_name') if this is defined and this.entity_id is defined else 'unknown automation' }}
-                ({{ this.entity_id if this is defined and this.entity_id is defined else 'unknown entity_id' }}).
-                Turned off target(s): {{ var_target_entities_on_names if var_target_entities_on_names else 'unknown target(s)' }}.
-                Reason: at 02:00 at least one target was still on.
+          - variables:
+              var_target_action: 'turn_off'
 
       #---------------
       # Case SAFE - SafeOff after Home Assistant restart
@@ -603,10 +657,61 @@ action:
             condition: template
             value_template: '{{ var_bol_any_target_on }}'
 
-          - alias: 'Turn off targets after Home Assistant restart'
-            service: homeassistant.turn_off
+          - variables:
+              var_target_action: 'turn_off'
+
+  #---------------
+  # Main choose split
+  #---------------
+  - alias: 'Execute the resolved target action'
+    choose:
+      - alias: 'Turn on targets using the selected brightness method'
+        conditions:
+          - condition: template
+            value_template: "{{ var_target_action == 'turn_on' }}"
+        sequence:
+          # External
+          #---------------
+          # Turn ON using dynamic brightness
+          #---------------
+          - action: >-
+              {{ var_dynamic_brightness_script }}
+            data:
+              in_target_entity_control: !input in_target_entity_control
+              in_enable_internal_dynamic_brightness: !input in_enable_internal_dynamic_brightness
+              in_clock_start_time: !input in_clock_start_brightness
+              in_clock_end_time: !input in_clock_end_brightness
+              in_min_brightness_pct: !input in_min_brightness_pct
+              in_max_brightness_pct: !input in_max_brightness_pct
+              in_brightness_curve_gamma: !input in_brightness_curve_gamma
+              in_light_transition_seconds: !input in_light_transition_seconds
+
+      - alias: 'Turn off target(s)'
+        conditions:
+          - condition: template
+            value_template: "{{ var_target_action == 'turn_off' }}"
+        sequence:
+          - service: homeassistant.turn_off
             target:
-              entity_id: !input 'in_target_entity_control'
+              entity_id: !input in_target_entity_control
+
+  - alias: 'Notify when the daily safety shutdown turns off target(s)'
+    if:
+      - condition: trigger
+        id: trigger_time_02am
+      - condition: template
+        value_template: "{{ var_target_action == 'turn_off' }}"
+    then:
+      - service: persistent_notification.create
+        data:
+          title: >-
+            02:00 safety shutdown executed -
+            {{ state_attr(this.entity_id, 'friendly_name') if this is defined and this.entity_id is defined else 'unknown automation' }}
+          message: >-
+            Automation: {{ state_attr(this.entity_id, 'friendly_name') if this is defined and this.entity_id is defined else 'unknown automation' }}
+            ({{ this.entity_id if this is defined and this.entity_id is defined else 'unknown entity_id' }}).
+            Turned off target(s): {{ var_target_entities_on_names if var_target_entities_on_names else 'unknown target(s)' }}.
+            Reason: at 02:00 at least one target was still on.
 
 #---------------
 # mode
