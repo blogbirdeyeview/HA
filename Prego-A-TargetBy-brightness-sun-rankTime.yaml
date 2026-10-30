@@ -6,22 +6,19 @@
 
 # 2026-10-30
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.46
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.47
   description: |
-    Automatically controls one or more switches/lights using a motion sensor and sunlight and a configurable quiet/sleep time window.
+    Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
-    - Turns the target(s) ON when motion is detected outside the configured quiet window.
-    - Turns the target(s) OFF after a configurable no-motion timeout.
-    - Optional quiet-window boundary actions are disabled by default. When enabled, targets turn OFF at the start if there is no motion and turn ON at the end if motion is detected.
-    - Turns the target(s) OFF at 02:00 as a daily safety shutdown (if any target is ON).
-    - Brightness control can be disabled, managed internally during a configured time window, or delegated to HACS Adaptive Lighting. This applies to light targets only.
+    - Turns the target(s) ON when motion is detected and conditions allow.
+    - Turns the target(s) OFF after the selected no-motion time. An optional keep-alive sensor can prevent turn-off while motion continues.
+    - Turns the target(s) OFF any target still on at 02:00 as a daily safety measure.
+    - Optional quiet-hour actions can turn targets OFF at the start and back ON at the end if motion is detected.
+    - Optional Sunlight conditions help determine when targets should turn ON or OFF.
+    - Optional turns targets OFF after Home Assistant restarts when no motion is detected.
+    - Optional automatic brightness control for lights works with Prego dynamic brightness and HACS Adaptive Lighting.
 
-    * Optional "keep-alive" motion sensor prevents turning OFF if motion is still present.
-    * Optional "away-from-home" filter prevents turning ON while no one is home.
-    * Optional "stealth-mode" filter prevents turning ON while one or more stealth flags are active.
-    * Optional built-in Prego internal light brightness control.
-    * Internal dynamic brightness uses the selected Prego-S-dynamic-light.yaml script instance during the configured time window. If none is selected, script.prego_script_dynamic_light_control_v4_18_2 is used.
-    * When an Adaptive Lighting adapt_brightness switch is selected, this automation disables it while internal dynamic brightness is active and enables it outside that window or when internal brightness is disabled.
+    * Away-from-home and stealth options can prevent automatic turn-ON.
   domain: automation
   homeassistant:
     min_version: 2026.6.0
