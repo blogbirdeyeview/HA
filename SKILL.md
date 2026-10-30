@@ -170,12 +170,26 @@ variables:
   in_target_light: !input target_light
   in_motion_sensor: !input motion_sensor
   in_auto_off_seconds: !input auto_off_seconds
-
-  var_auto_off_delay: "{{ in_auto_off_seconds | int(0) }}"
-  var_target_entity_id: "{{ expand(in_target_light) | map(attribute='entity_id') | list | first }}"
-
-  var_bol_is_light_on: "{{ is_state(var_target_entity_id, 'on') }}"
+  var_bol_motion_sensor_keep_alive: >
+    {% if not var_motion_sensor_keep_alive %}
+      {{ false }}
+    {% else %}
+      {{ is_state(var_motion_sensor_keep_alive, 'on') | bool }}
+    {% endif %}
+  #--- Block-var
+  var_bol_away_from_home: >
+    {% if not var_away_from_home %}
+      {{ false }}
+    {% else %}
+      {{ is_state(var_away_from_home, 'on') | bool }}
+    {% endif %}
+  #--- Block-var
   var_bol_has_valid_target: "{{ var_target_entity_id is not none }}"
+  var_bol_any_target_on: >-
+    {{ expand(var_target_entities)
+    | selectattr('state', 'eq', 'on')
+    | list
+    | count > 0 }}
 ```
 
 ## Conditions and Actions

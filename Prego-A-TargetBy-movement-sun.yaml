@@ -2,7 +2,7 @@
 # 2025-11-22
 # USO - Miguel
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & sun v4.13
+  name: Prego - Automatic switches/lights - By motion detection & sun v4.14
   description: |
     Automatically controls one or more lights/switches using a motion sensor and a night/day schedule (sunset/sunrise helpers).
 
@@ -119,12 +119,14 @@ variables:
     {% else %}
       {{ is_state(var_motion_sensor_keep_alive, 'on') | bool }}
     {% endif %}
+  #--- Block-var
   var_bol_away_from_home: >
     {% if not var_away_from_home %}
       {{ false }}
     {% else %}
       {{ is_state(var_away_from_home, 'on') | bool }}
     {% endif %}
+  #--- Block-var
   var_bol_stealth_mode: >
     {% if not var_stealth_mode or (var_stealth_mode | length == 0) %}
       {{ false }}
@@ -137,16 +139,19 @@ variables:
       | bool
     }}
     {% endif %}
+  #--- Block-var
   var_bol_any_target_on: >-
     {{ expand(var_target_entities)
     | selectattr('state', 'eq', 'on')
     | list
     | count > 0 }}
+  #--- Block-var
   var_bol_any_target_off_or_unavailable: >-
     {{ expand(var_target_entities)
     | selectattr('state', 'in', ['off', 'unavailable', 'unknown'])
     | list
     | count > 0 }}
+  #--- Block-var
   var_target_entities_on_names: >-
     {% set ns = namespace(items=[]) %}
     {% for entity in expand(var_target_entities) if entity.state == 'on' %}
@@ -217,11 +222,13 @@ action:
               - trigger_time_night
 
         sequence:
-          - condition: template
+          - alias: 'Someone is home'
+            condition: template
             value_template: '{{ not var_bol_away_from_home }}'
             # Someone is home
 
-          - condition: template
+          - alias: 'Stealth mode is inactive'
+            condition: template
             value_template: '{{ not var_bol_stealth_mode }}'
             # Stealth mode is not active (No ninjas)
 
@@ -297,11 +304,6 @@ action:
             entity_id: !input 'in_motion_sensor'
             state: 'off'
 
-          - condition: state
-            entity_id: !input 'in_motion_sensor'
-            state: 'off'
-            for: !input in_inactivity_timeout
-
           - condition: template
             value_template: '{{ not var_bol_motion_sensor_keep_alive }}'
 
@@ -314,7 +316,8 @@ action:
       #---------------
       - alias: '02:00 safety shutdown: turn OFF target(s)'
         conditions:
-          - condition: trigger
+          - alias: 'Triggered by the 02:00 safety timer'
+            condition: trigger
             id:
               - trigger_time_02am
         sequence:
@@ -322,7 +325,8 @@ action:
             condition: template
             value_template: '{{ var_bol_any_target_on }}'
 
-          - service: homeassistant.turn_off
+          - alias: 'Turn off targets during the daily safety shutdown'
+            service: homeassistant.turn_off
             target:
               entity_id: !input 'in_target_entity_control'
 

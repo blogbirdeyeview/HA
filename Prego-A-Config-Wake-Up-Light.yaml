@@ -1,6 +1,6 @@
 # 2026-02-14
 blueprint:
-  name: Prego - Config Wake up to configurable actions at next alarm v2.15
+  name: Prego - Config Wake up to configurable actions at next alarm v2.17
   description: >-
     Runs configurable actions before your next alarm.
     The blueprint listens to an alarm timestamp (from the Home Assistant mobile app) and writes an offset time
@@ -104,6 +104,7 @@ variables:
     {% else %}
       {{ is_state(var_away_from_home, 'on') | bool }}
     {% endif %}
+  #--- Block-var
   var_bol_stealth_mode: >
     {% if not var_stealth_mode or (var_stealth_mode | length == 0) %}
       {{ false }}
@@ -164,13 +165,15 @@ action:
           - condition: trigger
             id: wake_up
         sequence:
-          - alias: 'Filter: someone is home'
+          - alias: 'Someone is home'
             condition: template
             value_template: '{{ not var_bol_away_from_home }}'
+            # Someone is home
 
-          - alias: 'Filter: not in stealth mode'
+          - alias: 'Stealth mode is inactive'
             condition: template
             value_template: '{{ not var_bol_stealth_mode }}'
+            # Stealth mode is not active (No ninjas)
 
           - alias: 'Time window: only between start and end'
             condition: time
