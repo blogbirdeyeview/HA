@@ -2,7 +2,7 @@
 # 2026-10-16
 # USO - Miguel
 blueprint:
-  name: Prego - Automatic switches/lights custom - By motion detection & sun v1.31
+  name: Prego - Automatic switches/lights custom - By motion detection & sun v1.32
   description: |
     Automatically controls one or more lights/switches using a motion sensor and a night/day schedule (sunset/sunrise helpers). (custom light switch ON by script)
 
@@ -92,16 +92,16 @@ blueprint:
       selector:
         boolean:
 
-    in_clock_in_time:
-      name: Start of period without light time (23:00:00)
-      description: From what time will this automation work?
+    in_quiet_window_start:
+      name: Quiet window start (23:00:00)
+      description: When the quiet window starts. While it is active, motion does not turn on the targets.
       default: '23:00:00'
       selector:
         time: {}
 
-    in_clock_out_time:
-      name: End of period without light time (07:00:00)
-      description: Until what time will this automation work?
+    in_quiet_window_end:
+      name: Quiet window end (07:00:00)
+      description: When the quiet window ends. Motion can turn on the targets again after this time.
       default: '07:00:00'
       selector:
         time: {}

@@ -6,7 +6,7 @@
 
 # 2026-10-30
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.44
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.45
   description: |
     Automatically controls one or more switches/lights using a motion sensor and sunlight and a configurable quiet/sleep time window.
 
@@ -458,7 +458,7 @@ action:
                     entity_id: !input 'in_motion_sensor'
                     state: 'on'
                     # Motion still detected
-                  - alias: 'Current time is outside the quiet window'
+                  - alias: 'Current time is not inside the quiet window'
                     condition: not
                     conditions:
                       - alias: 'Current time is inside the quiet window'

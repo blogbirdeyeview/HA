@@ -8,7 +8,7 @@
 
 # 2026-10-11
 blueprint:
-  name: Prego - Automatic lights - By motion detection - rank of time v2.22
+  name: Prego - Automatic lights - By motion detection - rank of time v2.23
   description: |
     Automatically controls one or more lights using a motion sensor and a configurable quiet/sleep time window.
 
@@ -84,16 +84,16 @@ blueprint:
         boolean:
 
     # Motion/light activation quiet window
-    in_clock_in_time:
-      name: Start of period without light time (23:00:00)
-      description: From what time will this automation work?
+    in_quiet_window_start:
+      name: Quiet window start (23:00:00)
+      description: When the quiet window starts. While it is active, motion does not turn on the targets.
       default: '23:00:00'
       selector:
         time: {}
 
-    in_clock_out_time:
-      name: End of period without light time (07:00:00)
-      description: Until what time will this automation work?
+    in_quiet_window_end:
+      name: Quiet window end (07:00:00)
+      description: When the quiet window ends. Motion can turn on the targets again after this time.
       default: '07:00:00'
       selector:
         time: {}
@@ -457,13 +457,13 @@ action:
                     entity_id: !input 'in_motion_sensor'
                     state: 'on'
                     # Motion still detected
-                  - alias: 'Current time is outside the quiet window'
+                  - alias: 'Current time is not inside the quiet window'
                     condition: not
                     conditions:
                       - alias: 'Current time is inside the quiet window'
                         condition: time
-                        after: !input 'in_clock_in_time'
-                        before: !input 'in_clock_out_time'
+                        after: !input 'in_quiet_window_start'
+                        before: !input 'in_quiet_window_end'
                   # EXTRA solo fuera de rango de tiempo
                 sequence:
                   # EXTERNO

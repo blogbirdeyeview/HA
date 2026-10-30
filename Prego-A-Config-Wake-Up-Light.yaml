@@ -1,6 +1,6 @@
 # 2026-02-14
 blueprint:
-  name: Prego - Config Wake up to configurable actions at next alarm v2.17
+  name: Prego - Config Wake up to configurable actions at next alarm v2.18
   description: >-
     Runs configurable actions before your next alarm.
     The blueprint listens to an alarm timestamp (from the Home Assistant mobile app) and writes an offset time
@@ -65,17 +65,17 @@ blueprint:
           domain: input_boolean
           multiple: true
 
-    #*** Config
-    in_clock_in_time:
-      name: Time window start
-      description: From what time will this automation work?
-      default: '20:00:00'
+    # Motion/light activation quiet window
+    in_quiet_window_start:
+      name: Quiet window start (23:00:00)
+      description: When the quiet window starts. While it is active, motion does not turn on the targets.
+      default: '23:00:00'
       selector:
         time: {}
 
-    in_clock_out_time:
-      name: Time window End
-      description: Until what time will this automation work?
+    in_quiet_window_end:
+      name: Quiet window end (07:00:00)
+      description: When the quiet window ends. Motion can turn on the targets again after this time.
       default: '07:00:00'
       selector:
         time: {}
@@ -175,10 +175,13 @@ action:
             value_template: '{{ not var_bol_stealth_mode }}'
             # Stealth mode is not active (No ninjas)
 
-          - alias: 'Time window: only between start and end'
-            condition: time
-            after: !input in_clock_in_time
-            before: !input in_clock_out_time
+          - alias: 'Current time is not inside the quiet window'
+            condition: not
+            conditions:
+              - alias: 'Current time is inside the quiet window'
+                condition: time
+                after: !input 'in_quiet_window_start'
+                before: !input 'in_quiet_window_end'
 
           - sequence: !input in_actions
 
