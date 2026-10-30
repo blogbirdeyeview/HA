@@ -6,7 +6,7 @@
 
 # 2026-10-30
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.49
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.51
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -407,9 +407,9 @@ trigger:
 #---------------
 
 action:
-    #---------------
-    # [Check] ajuste de validaciones y configuraciones iniciales
-    #---------------
+  #---------------
+  # [Check] ajuste de validaciones y configuraciones iniciales
+  #---------------
   - alias: 'Stop automation during quiet hours for selected triggers'
     if:
       - alias: 'Triggered by motion start or a quiet-window boundary'
@@ -497,61 +497,6 @@ action:
   - alias: 'Resolve the target action for the active trigger'
     choose:
       #---------------
-      # Scheduled actions at quiet-window boundaries
-      #---------------
-      - alias: 'Turn OFF at quiet-window start when there is no motion'
-        conditions:
-          - alias: 'Triggered by quiet-window start'
-            condition: trigger
-            id:
-              - trigger_quiet_window_start
-          - alias: 'Quiet-window boundary actions are enabled'
-            condition: template
-            value_template: '{{ in_enable_quiet_window_boundary_actions | bool }}'
-        sequence:
-          - alias: 'Motion sensor is clear'
-            condition: state
-            entity_id: !input in_motion_sensor
-            state: 'off'
-
-          - alias: 'Keep-alive sensor is not detecting motion'
-            condition: template
-            value_template: '{{ not var_bol_motion_sensor_keep_alive }}'
-
-          - alias: 'At least one target is ON'
-            condition: template
-            value_template: '{{ var_bol_any_target_on }}'
-
-          - variables:
-              var_target_action: 'turn_off'
-
-      - alias: 'Turn ON at quiet-window end when motion is detected'
-        conditions:
-          - alias: 'Triggered by quiet-window end'
-            condition: trigger
-            id:
-              - trigger_quiet_window_end
-          - alias: 'Quiet-window boundary actions are enabled'
-            condition: template
-            value_template: '{{ in_enable_quiet_window_boundary_actions | bool }}'
-        sequence:
-          - alias: 'Motion sensor is detecting motion'
-            condition: state
-            entity_id: !input in_motion_sensor
-            state: 'on'
-
-          - alias: 'Someone is home'
-            condition: template
-            value_template: '{{ not var_bol_away_from_home }}'
-
-          - alias: 'Stealth mode is inactive'
-            condition: template
-            value_template: '{{ not var_bol_stealth_mode }}'
-
-          - variables:
-              var_target_action: 'turn_on'
-
-      #---------------
       # Case 1 - Turn ON the light when motion is detected.
       #---------------
       - alias: 'Turn ON when motion is detected or night begins'
@@ -560,42 +505,31 @@ action:
             condition: trigger
             id:
               - trigger_motion_start
+              - trigger_time_night
 
         sequence:
-          - alias: 'Check motion requirements before turning on the targets'
-            choose:
-              - alias: 'Turn ON only when motion conditions are satisfied'
-                conditions:
-                  - alias: 'Someone is home'
-                    condition: template
-                    value_template: '{{ not var_bol_away_from_home }}'
-                    # Someone is home
+          - alias: 'Someone is home'
+            condition: template
+            value_template: '{{ not var_bol_away_from_home }}'
+            # Someone is home
 
-                  - alias: 'Stealth mode is inactive'
-                    condition: template
-                    value_template: '{{ not var_bol_stealth_mode }}'
-                    # Stealth mode is not active (No ninjas)
+          - alias: 'Stealth mode is inactive'
+            condition: template
+            value_template: '{{ not var_bol_stealth_mode }}'
+            # Stealth mode is not active (No ninjas)
 
-                  # Keep the brightness script reachable on motion even when all targets are already on.
-                  # - alias: 'Check: at least one target is OFF'
-                  #   condition: template
-                  #   value_template: '{{ var_bol_any_target_off_or_unavailable }}'
-                  - alias: 'Motion is still detected'
-                    condition: state
-                    entity_id: !input 'in_motion_sensor'
-                    state: 'on'
-                    # Motion still detected
-                  - alias: 'Current time is not inside the quiet window'
-                    condition: not
-                    conditions:
-                      - alias: 'Current time is inside the quiet window'
-                        condition: time
-                        after: !input 'in_quiet_window_start'
-                        before: !input 'in_quiet_window_end'
-                  # Extra: only outside the configured time range
-                sequence:
-                  - variables:
-                      var_target_action: 'turn_on'
+          # Keep the brightness script reachable on motion even when all targets are already on.
+          # - alias: 'Check: at least one target is OFF'
+          #   condition: template
+          #   value_template: '{{ var_bol_any_target_off_or_unavailable }}'
+          - alias: 'Motion is still detected'
+            condition: state
+            entity_id: !input 'in_motion_sensor'
+            state: 'on'
+            # Motion still detected
+
+          - variables:
+              var_target_action: 'turn_on'
 
       #---------------
       # Case 2 - Turn OFF when no motion is detected
@@ -633,9 +567,9 @@ action:
               var_target_action: 'turn_off'
 
       #---------------
-      # Case 3 - To turn OFF the light when it is daytime.
+      # Case 3 Scheduled - To turn OFF the light when it is daytime.
       #---------------
-      - alias: 'Turn off the target - it is already morning!'
+      - alias: 'Scheduled turn OFF the target - it is already morning!'
         conditions:
           - condition: trigger
             id:
@@ -652,6 +586,67 @@ action:
 
           - condition: template
             value_template: '{{ not var_bol_motion_sensor_keep_alive }}'
+
+          - variables:
+              var_target_action: 'turn_off'
+
+      #---------------
+      # Case 3 Scheduled - To turn ON at quiet-window boundaries
+      #---------------
+      - alias: 'Scheduled turn ON at quiet-window end when motion is detected'
+        conditions:
+          - alias: 'Triggered by quiet-window end'
+            condition: trigger
+            id:
+              - trigger_quiet_window_end
+          - alias: 'Quiet-window boundary actions are enabled'
+            condition: template
+            value_template: '{{ in_enable_quiet_window_boundary_actions | bool }}'
+        sequence:
+          - alias: 'Someone is home'
+            condition: template
+            value_template: '{{ not var_bol_away_from_home }}'
+            # Someone is home
+
+          - alias: 'Stealth mode is inactive'
+            condition: template
+            value_template: '{{ not var_bol_stealth_mode }}'
+            # Stealth mode is not active (No ninjas)
+
+          - alias: 'Motion is still detected'
+            condition: state
+            entity_id: !input 'in_motion_sensor'
+            state: 'on'
+            # Motion still detected
+
+          - variables:
+              var_target_action: 'turn_on'
+
+      #---------------
+      # Case 3 Scheduled - To turn OFF at quiet-window boundaries
+      #---------------
+      - alias: 'Scheduled turn OFF at quiet-window start when there is no motion'
+        conditions:
+          - alias: 'Triggered by quiet-window start'
+            condition: trigger
+            id:
+              - trigger_quiet_window_start
+          - alias: 'Quiet-window boundary actions are enabled'
+            condition: template
+            value_template: '{{ in_enable_quiet_window_boundary_actions | bool }}'
+        sequence:
+          - alias: 'Motion sensor is clear'
+            condition: state
+            entity_id: !input in_motion_sensor
+            state: 'off'
+
+          - alias: 'Keep-alive sensor is not detecting motion'
+            condition: template
+            value_template: '{{ not var_bol_motion_sensor_keep_alive }}'
+
+          - alias: 'At least one target is ON'
+            condition: template
+            value_template: '{{ var_bol_any_target_on }}'
 
           - variables:
               var_target_action: 'turn_off'
