@@ -1,31 +1,31 @@
-# Basado en Prego-A-TargetBy-movement-sun-rankTime.yaml
-# El cual es basado en:
-# Basado en Prego-A-TargetBy-movement-sun-rankTime.yaml
-# Basado en Prego-A-TargetBy-movement-sun.yaml
+# Based on Prego-A-TargetBy-movement-light-rankTime.yaml
+# Which is based on:
+# Based on Prego-A-TargetBy-movement-sun-rankTime.yaml
+# Based on Prego-A-TargetBy-movement-sun.yaml
 # IMPORTANT: depends on an instance of Prego-S-dynamic-light.yaml (default: script.prego_dynamic_light_control_v4_XX)
 
 # 2026-10-30
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.43
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.44
   description: |
-    Automatically controls one or more switches/lights using a motion sensor and sunlight and configurable quiet/sleep time window.
+    Automatically controls one or more switches/lights using a motion sensor and sunlight and a configurable quiet/sleep time window.
 
-    - Turns the target(s) ON when motion is detected during the configured window (Si esta configurado si no proende todo el dia).
+    - Turns the target(s) ON when motion is detected outside the configured quiet window. If no quiet window is configured, it can remain active all day.
     - Turns the target(s) OFF after a configurable no-motion timeout.
     - Turns the target(s) OFF when the configured quiet window starts (if there is no motion).
     - Turns the target(s) OFF at 02:00 as a daily safety shutdown (if any target is ON).
-    - Brightness control can be disabled, handled internally during a configured time window, or delegated to HACS Adaptive Lighting. (Solo aplica para entradas lights)
+    - Brightness control can be disabled, managed internally during a configured time window, or delegated to HACS Adaptive Lighting. This applies to light targets only.
 
     * Optional "keep-alive" motion sensor prevents turning OFF if motion is still present.
     * Optional "away-from-home" filter prevents turning ON while no one is home.
     * Optional "stealth-mode" filter prevents turning ON while one or more stealth flags are active.
-    * Optional "internal-brightness" control de intencidad de luz interno de Prego.
+    * Optional built-in Prego internal light brightness control.
     * Internal dynamic brightness uses the selected Prego-S-dynamic-light.yaml script instance during the configured time window. If none is selected, script.prego_script_dynamic_light_control_v4_18_2 is used.
     * When an Adaptive Lighting adapt_brightness switch is selected, this automation disables it while internal dynamic brightness is active and enables it outside that window or when internal brightness is disabled.
   domain: automation
   homeassistant:
     min_version: 2026.6.0
-  # Tab necesario por inputs
+  # Required section for inputs
   #
   #---------------
   # Inputs
@@ -84,29 +84,29 @@ blueprint:
         boolean:
 
     # Motion/light activation quiet window
-    in_clock_in_time:
-      name: Start of period without light time (23:00:00)
-      description: From what time will this automation work?
+    in_quiet_window_start:
+      name: Quiet window start (23:00:00)
+      description: When the quiet window starts. While it is active, motion does not turn on the targets.
       default: '23:00:00'
       selector:
         time: {}
 
-    in_clock_out_time:
-      name: End of period without light time (07:00:00)
-      description: Until what time will this automation work?
+    in_quiet_window_end:
+      name: Quiet window end (07:00:00)
+      description: When the quiet window ends. Motion can turn on the targets again after this time.
       default: '07:00:00'
       selector:
         time: {}
 
     # ─────────────────────────────
-    # CONFIGURACION AVANZADA
+    # Internal brightness control
     # ─────────────────────────────
     # collapsed Dynamic internal brightness - START
-    avanzado:
-      name: Advanced configuration
-      icon: mdi:cog
+    advanced_brightness:
+      name: Internal brightness control
+      icon: mdi:brightness-auto
       description: >
-        Additional options for advanced users.
+        Optional dynamic brightness schedule and Adaptive Lighting coordination for light targets.
       collapsed: true
       input:
         in_enable_internal_dynamic_brightness:
@@ -463,11 +463,11 @@ action:
                     conditions:
                       - alias: 'Current time is inside the quiet window'
                         condition: time
-                        after: !input 'in_clock_in_time'
-                        before: !input 'in_clock_out_time'
-                  # EXTRA solo fuera de rango de tiempo
+                        after: !input 'in_quiet_window_start'
+                        before: !input 'in_quiet_window_end'
+                  # Extra: only outside the configured time range
                 sequence:
-                  # EXTERNO
+                  # External
                   #---------------
                   # Turn ON using dynamic brightness
                   #---------------
