@@ -6,7 +6,7 @@
 
 # 2026-10-30
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.47
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.48
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -79,6 +79,21 @@ blueprint:
       default: false
       selector:
         boolean:
+
+    #*** Custum Time Prego
+    in_time_morning:
+      name: Sunrise Helper *
+      description: Choose the time helper corresponding to sunrise.
+      selector:
+        entity:
+          domain: input_datetime
+
+    in_time_night:
+      name: Sunset Helper *
+      description: Choose the time helper corresponding to sunset.
+      selector:
+        entity:
+          domain: input_datetime
 
     quiet_window_schedule:
       name: Quiet window schedule
@@ -346,6 +361,14 @@ trigger:
     for: !input in_inactivity_timeout
 
   - platform: time
+    id: trigger_time_morning
+    at: !input 'in_time_morning'
+
+  - platform: time
+    id: trigger_time_night
+    at: !input 'in_time_night'
+
+  - platform: time
     alias: Quiet window starts
     at: !input in_quiet_window_start
     id: trigger_quiet_window_start
@@ -356,11 +379,6 @@ trigger:
     id: trigger_quiet_window_end
 
   - platform: time
-    alias: Daily 02:00 safety shutdown
-    at: '02:00:00'
-    id: trigger_time_02am
-
-  - platform: time
     alias: Internal dynamic-brightness window starts
     at: !input in_clock_start_brightness
     id: trigger_internal_brightness_start
@@ -369,6 +387,11 @@ trigger:
     alias: Internal dynamic-brightness window ends
     at: !input in_clock_end_brightness
     id: trigger_internal_brightness_end
+
+  - platform: time
+    alias: Daily 02:00 safety shutdown
+    at: '02:00:00'
+    id: trigger_time_02am
 
   - platform: homeassistant
     alias: Home Assistant started
@@ -384,6 +407,9 @@ trigger:
 #---------------
 
 action:
+    #---------------
+    # [Check] ajuste de validaciones y configuraciones iniciales
+    #---------------
   - alias: 'Synchronize the Adaptive Lighting switch with internal brightness control'
     if:
       - alias: 'The selected Adaptive Lighting switch exists and is available'
@@ -447,7 +473,7 @@ action:
                   entity_id: '{{ in_adaptive_lighting_adapt_brightness_switch }}'
 
     #---------------
-    # Resolve requested target action
+    # [Choose Path] Resolve requested target action
     #---------------
   - alias: 'Resolve the target action for the active trigger'
     choose:
@@ -658,7 +684,7 @@ action:
               var_target_action: 'turn_off'
 
   #---------------
-  # Main choose split
+  # [To Do] Main choose split
   #---------------
   - alias: 'Execute the resolved target action'
     choose:
