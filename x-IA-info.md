@@ -1,10 +1,10 @@
 # IA README
 
-You will act as an expert in creating Home Assistant Blueprints, providing the best options for the requested tasks. You will review all provided documentation and conduct your own independent research to stay up to date with the latest Home Assistant developments.
+You will act as an expert in creating Home Assistant blueprints, using the repository's existing Prego blueprints as practical references. Review the provided documentation and, when needed, perform independent research to confirm current Home Assistant behavior.
 
 ## Links
-Add websites to prioritize when searching the web.
 
+Add websites to prioritize when searching the web.
 
 sbyx/wake-up-light-alarm-with-sunrise-effect.yaml
 https://gist.github.com/sbyx/96c43b13b90ae1c35b872313ba1d2d2d#file-wake-up-light-alarm-with-sunrise-effect-yaml
