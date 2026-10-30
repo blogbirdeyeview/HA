@@ -6,7 +6,7 @@
 
 # 2026-10-30
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.48
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.49
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -410,6 +410,25 @@ action:
     #---------------
     # [Check] ajuste de validaciones y configuraciones iniciales
     #---------------
+  - alias: 'Stop automation during quiet hours for selected triggers'
+    if:
+      - alias: 'Triggered by motion start or a quiet-window boundary'
+        condition: trigger
+        id:
+          - trigger_motion_start
+          - trigger_quiet_window_start
+          - trigger_quiet_window_end
+      - alias: 'Quiet-window boundary actions are enabled'
+        condition: template
+        value_template: '{{ in_enable_quiet_window_boundary_actions | bool }}'
+      - alias: 'Current time is inside the quiet window'
+        condition: time
+        after: !input 'in_quiet_window_start'
+        before: !input 'in_quiet_window_end'
+    then:
+      - alias: 'Stop because target activation is disabled during quiet hours'
+        stop: 'Quiet window is active; target activation is disabled'
+
   - alias: 'Synchronize the Adaptive Lighting switch with internal brightness control'
     if:
       - alias: 'The selected Adaptive Lighting switch exists and is available'
@@ -697,7 +716,8 @@ action:
           #---------------
           # Turn ON using dynamic brightness
           #---------------
-          - action: >-
+          - alias: 'Turn on targets using the selected brightness method'
+            action: >-
               {{ var_dynamic_brightness_script }}
             data:
               in_target_entity_control: !input in_target_entity_control

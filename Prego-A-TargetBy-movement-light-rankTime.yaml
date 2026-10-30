@@ -8,7 +8,7 @@
 
 # 2026-10-11
 blueprint:
-  name: Prego - Automatic lights - By motion detection - rank of time v2.23
+  name: Prego - Automatic lights - By motion detection - rank of time v2.24
   description: |
     Automatically controls one or more lights using a motion sensor and a configurable quiet/sleep time window.
 
@@ -110,7 +110,7 @@ blueprint:
         Additional options for advanced users.
       collapsed: true
       input:
-        in_enable_skip_time_filter:
+        in_enable_internal_dynamic_brightness:
           name: Enable brightness control
           description: If enabled, the internal script controls brightness during its configured window and HACS Adaptive Lighting controls it outside that window. If disabled, the script leaves brightness unchanged and the selected HACS switch is enabled.
           default: false
@@ -235,7 +235,7 @@ trigger_variables:
   var_target_entities: !input in_target_entity_control
 
 variables:
-  in_enable_skip_time_filter: !input in_enable_skip_time_filter
+  in_enable_internal_dynamic_brightness: !input in_enable_internal_dynamic_brightness
   in_adaptive_lighting_adapt_brightness_switch: !input in_adaptive_lighting_adapt_brightness_switch
   in_clock_start_brightness: !input in_clock_start_brightness
   in_clock_end_brightness: !input in_clock_end_brightness
@@ -248,7 +248,7 @@ variables:
     {% set start_time = in_clock_start_brightness %}
     {% set end_time = in_clock_end_brightness %}
     {{
-      in_enable_skip_time_filter | bool
+      in_enable_internal_dynamic_brightness | bool
       and (
         (start_time < end_time and current_time >= start_time and current_time < end_time)
         or (start_time > end_time and (current_time >= start_time or current_time < end_time))
@@ -392,7 +392,7 @@ action:
             conditions:
               - alias: 'Internal brightness control is disabled'
                 condition: template
-                value_template: '{{ not (in_enable_skip_time_filter | bool) }}'
+                value_template: '{{ not (in_enable_internal_dynamic_brightness | bool) }}'
               - alias: 'HACS brightness is currently off'
                 condition: template
                 value_template: >-
@@ -407,7 +407,7 @@ action:
             conditions:
               - alias: 'Internal brightness control is enabled'
                 condition: template
-                value_template: '{{ in_enable_skip_time_filter | bool }}'
+                value_template: '{{ in_enable_internal_dynamic_brightness | bool }}'
               - alias: 'Current time is outside the internal brightness window'
                 condition: template
                 value_template: '{{ not var_bol_internal_dynamic_brightness_active }}'
@@ -466,7 +466,7 @@ action:
                         before: !input 'in_quiet_window_end'
                   # EXTRA solo fuera de rango de tiempo
                 sequence:
-                  # EXTERNO
+                  # External
                   #---------------
                   # Turn ON using dynamic brightness
                   #---------------
@@ -475,7 +475,7 @@ action:
                       {{ var_dynamic_brightness_script }}
                     data:
                       in_target_entity_control: !input in_target_entity_control
-                      in_enable_dynamic_brightness: !input in_enable_skip_time_filter
+                      in_enable_internal_dynamic_brightness: !input in_enable_internal_dynamic_brightness
                       in_clock_start_time: !input in_clock_start_brightness
                       in_clock_end_time: !input in_clock_end_brightness
                       in_min_brightness_pct: !input in_min_brightness_pct
