@@ -6,15 +6,15 @@
 
 # 2026-10-30
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.51
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.52
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
     - Turns the target(s) ON when motion is detected and conditions allow.
     - Turns the target(s) OFF after the selected no-motion time. An optional keep-alive sensor can prevent turn-off while motion continues.
     - Turns the target(s) OFF any target still on at 02:00 as a daily safety measure.
-    - Optional quiet-hour actions can turn targets OFF at the start and back ON at the end if motion is detected.
-    - Optional Sunlight conditions help determine when targets should turn ON or OFF.
+    - Optional quiet-window behavior blocks motion-triggered turn-on during quiet hours, turns active targets OFF if motion clears before processing, turns targets OFF at quiet-window start when there is no motion, and ON at quiet-window end when motion is detected.
+    - Optional sun-window behavior blocks motion-triggered turn-on during daylight and turns active targets OFF if motion clears before processing. It also turns targets OFF at sunrise when there is no motion and ON at sunset when motion is detected.
     - Optional turns targets OFF after Home Assistant restarts when no motion is detected.
     - Optional automatic brightness control for lights works with Prego dynamic brightness and HACS Adaptive Lighting.
 
@@ -80,32 +80,43 @@ blueprint:
       selector:
         boolean:
 
-    #*** Custum Time Prego
-    in_time_morning:
-      name: Sunrise Helper *
-      description: Choose the time helper corresponding to sunrise.
-      selector:
-        entity:
-          domain: input_datetime
 
-    in_time_night:
-      name: Sunset Helper *
-      description: Choose the time helper corresponding to sunset.
-      selector:
-        entity:
-          domain: input_datetime
 
     quiet_window_schedule:
-      name: Quiet window schedule
+      name: Sun and quiet window schedule
       icon: mdi:clock-outline
       description: >
-        Set when the quiet window starts and ends, and optionally run an action at each boundary.
+        Configure sunrise, sunset, and quiet-hour windows, including motion restrictions and optional target actions at their boundaries.
       collapsed: false
       input:
-        # Motion activation quiet window
-        in_enable_quiet_window_boundary_actions:
-          name: Enable quiet-window boundary actions
-          description: When enabled, turn targets off at the start if there is no motion and turn them on at the end if motion is detected.
+        # --- Sun-window behavior
+        in_enable_sun_window_behavior:
+          name: Enable sun-window behavior
+          description: When enabled, motion does not turn targets on between sunrise and sunset. If motion has cleared by the time a motion-start run is checked, active targets are turned off. Targets also turn off at sunrise when there is no motion and turn on at sunset when motion is detected.
+          default: false
+          selector:
+            boolean: {}
+
+        #*** Custum Time Prego
+        in_time_morning:
+          name: Sunrise Helper *
+          description: Choose the time helper corresponding to sunrise.
+          selector:
+            entity:
+              domain: input_datetime
+
+        in_time_night:
+          name: Sunset Helper *
+          description: Choose the time helper corresponding to sunset.
+          selector:
+            entity:
+              domain: input_datetime
+        # --- 
+
+        # --- Quiet-window behavior
+        in_enable_quiet_window_behavior:
+          name: Enable quiet-window behavior
+          description: When enabled, motion does not turn targets on during the quiet window. If motion has cleared by the time a motion-start run is checked, active targets are turned off. Targets also turn off at quiet-window start if there is no motion and turn on at quiet-window end if motion is detected.
           default: false
           selector:
             boolean: {}
@@ -124,6 +135,7 @@ blueprint:
           default: '07:00:00'
           selector:
             time: {}
+        # --- 
 
     # ─────────────────────────────
     # Internal brightness control
@@ -263,7 +275,8 @@ trigger_variables:
   var_target_entities: !input in_target_entity_control
 
 variables:
-  in_enable_quiet_window_boundary_actions: !input in_enable_quiet_window_boundary_actions
+  in_enable_sun_window_behavior: !input in_enable_sun_window_behavior
+  in_enable_quiet_window_behavior: !input in_enable_quiet_window_behavior
   in_enable_internal_dynamic_brightness: !input in_enable_internal_dynamic_brightness
   in_adaptive_lighting_adapt_brightness_switch: !input in_adaptive_lighting_adapt_brightness_switch
   in_clock_start_brightness: !input in_clock_start_brightness
@@ -361,10 +374,12 @@ trigger:
     for: !input in_inactivity_timeout
 
   - platform: time
+    alias: Sunrise
     id: trigger_time_morning
     at: !input 'in_time_morning'
 
   - platform: time
+    alias: Sunset
     id: trigger_time_night
     at: !input 'in_time_night'
 
@@ -408,27 +423,78 @@ trigger:
 
 action:
   #---------------
-  # [Check] ajuste de validaciones y configuraciones iniciales
+  # [Check] Resolve motion start during the sun window
   #---------------
-  - alias: 'Stop automation during quiet hours for selected triggers'
+  - alias: 'Handle motion start during daylight'
     if:
-      - alias: 'Triggered by motion start or a quiet-window boundary'
+      - alias: 'Triggered by motion start'
         condition: trigger
         id:
           - trigger_motion_start
-          - trigger_quiet_window_start
-          - trigger_quiet_window_end
-      - alias: 'Quiet-window boundary actions are enabled'
+      - alias: 'Sun-window behavior is enabled'
         condition: template
-        value_template: '{{ in_enable_quiet_window_boundary_actions | bool }}'
+        value_template: '{{ in_enable_sun_window_behavior | bool }}'
+      - alias: 'Current time is between sunrise and sunset'
+        condition: time
+        after: !input 'in_time_morning'
+        before: !input 'in_time_night'
+    then:
+      - alias: 'Turn off targets if motion cleared before this check'
+        if:
+          - alias: 'Motion sensor is clear'
+            condition: state
+            entity_id: !input 'in_motion_sensor'
+            state: 'off'
+          - alias: 'At least one target is ON'
+            condition: template
+            value_template: '{{ var_bol_any_target_on }}'
+        then:
+          - alias: 'Turn off targets because no motion is detected during daylight'
+            service: homeassistant.turn_off
+            target:
+              entity_id: !input 'in_target_entity_control'
+
+      - alias: 'Stop after handling motion start during daylight'
+        stop: 'The sun window is active; motion-triggered activation is disabled'
+
+  #---------------
+  # [Check] Handle motion start during the quiet window
+  #---------------
+  - alias: 'Handle motion start during quiet hours'
+    if:
+      - alias: 'Triggered by motion start'
+        condition: trigger
+        id:
+          - trigger_motion_start
+      - alias: 'Quiet-window behavior is enabled'
+        condition: template
+        value_template: '{{ in_enable_quiet_window_behavior | bool }}'
       - alias: 'Current time is inside the quiet window'
         condition: time
         after: !input 'in_quiet_window_start'
         before: !input 'in_quiet_window_end'
     then:
-      - alias: 'Stop because target activation is disabled during quiet hours'
-        stop: 'Quiet window is active; target activation is disabled'
+      - alias: 'Turn off targets if motion cleared before this check'
+        if:
+          - alias: 'Motion sensor is clear'
+            condition: state
+            entity_id: !input 'in_motion_sensor'
+            state: 'off'
+          - alias: 'At least one target is ON'
+            condition: template
+            value_template: '{{ var_bol_any_target_on }}'
+        then:
+          - alias: 'Turn off targets because no motion is detected during quiet hours'
+            service: homeassistant.turn_off
+            target:
+              entity_id: !input 'in_target_entity_control'
 
+      - alias: 'Stop after handling motion start during quiet hours'
+        stop: 'The quiet window is active; motion-triggered activation is disabled'
+
+  #---------------
+  # [Check] Synchronize brightness control
+  #---------------
   - alias: 'Synchronize the Adaptive Lighting switch with internal brightness control'
     if:
       - alias: 'The selected Adaptive Lighting switch exists and is available'
@@ -499,13 +565,12 @@ action:
       #---------------
       # Case 1 - Turn ON the light when motion is detected.
       #---------------
-      - alias: 'Turn ON when motion is detected or night begins'
+      - alias: 'Turn ON when motion is detected'
         conditions:
           - alias: 'Triggered by motion start'
             condition: trigger
             id:
               - trigger_motion_start
-              - trigger_time_night
 
         sequence:
           - alias: 'Someone is home'
@@ -571,9 +636,13 @@ action:
       #---------------
       - alias: 'Scheduled turn OFF the target - it is already morning!'
         conditions:
-          - condition: trigger
+          - alias: 'Triggered by sunrise'
+            condition: trigger
             id:
               - trigger_time_morning
+          - alias: 'Sun-window behavior is enabled'
+            condition: template
+            value_template: '{{ in_enable_sun_window_behavior | bool }}'
 
         sequence:
           - alias: 'Check: at least one target is ON'
@@ -591,6 +660,36 @@ action:
               var_target_action: 'turn_off'
 
       #---------------
+      # Case 3 Scheduled - To turn ON at sunset
+      #---------------
+      - alias: 'Scheduled turn ON at sunset when motion is detected'
+        conditions:
+          - alias: 'Triggered by sunset'
+            condition: trigger
+            id:
+              - trigger_time_night
+          - alias: 'Sun-window behavior is enabled'
+            condition: template
+            value_template: '{{ in_enable_sun_window_behavior | bool }}'
+
+        sequence:
+          - alias: 'Someone is home'
+            condition: template
+            value_template: '{{ not var_bol_away_from_home }}'
+
+          - alias: 'Stealth mode is inactive'
+            condition: template
+            value_template: '{{ not var_bol_stealth_mode }}'
+
+          - alias: 'Motion is still detected'
+            condition: state
+            entity_id: !input 'in_motion_sensor'
+            state: 'on'
+
+          - variables:
+              var_target_action: 'turn_on'
+
+      #---------------
       # Case 3 Scheduled - To turn ON at quiet-window boundaries
       #---------------
       - alias: 'Scheduled turn ON at quiet-window end when motion is detected'
@@ -599,9 +698,9 @@ action:
             condition: trigger
             id:
               - trigger_quiet_window_end
-          - alias: 'Quiet-window boundary actions are enabled'
+          - alias: 'Quiet-window behavior is enabled'
             condition: template
-            value_template: '{{ in_enable_quiet_window_boundary_actions | bool }}'
+            value_template: '{{ in_enable_quiet_window_behavior | bool }}'
         sequence:
           - alias: 'Someone is home'
             condition: template
@@ -631,9 +730,9 @@ action:
             condition: trigger
             id:
               - trigger_quiet_window_start
-          - alias: 'Quiet-window boundary actions are enabled'
+          - alias: 'Quiet-window behavior is enabled'
             condition: template
-            value_template: '{{ in_enable_quiet_window_boundary_actions | bool }}'
+            value_template: '{{ in_enable_quiet_window_behavior | bool }}'
         sequence:
           - alias: 'Motion sensor is clear'
             condition: state
