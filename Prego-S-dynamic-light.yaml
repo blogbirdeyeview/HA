@@ -1,5 +1,5 @@
 blueprint:
-  name: Prego Script - Dynamic Light Control  v5.25
+  name: Prego Script - Dynamic Light Control  v5.26
   description: >-
     Turns on selected switches or lights. Lights receive dynamic brightness
     when enabled and supported; switches are turned on without brightness data.
@@ -444,3 +444,11 @@ sequence:
         alias: Turn on without changing brightness
         target:
           entity_id: '{{ var_target_entities }}'
+
+#---------------
+# mode
+#---------------
+
+mode: parallel
+max: 10
+max_exceeded: warning
