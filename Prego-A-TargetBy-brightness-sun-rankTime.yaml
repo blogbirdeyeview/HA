@@ -4,17 +4,19 @@
 # Based on Prego-A-TargetBy-movement-sun.yaml
 # IMPORTANT: depends on an instance of Prego-S-dynamic-light.yaml (default: script.prego_dynamic_light_control_v4_XX)
 
-# 2026-10-30
+# 2026-11-01
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.52
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.53
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
     - Turns the target(s) ON when motion is detected and conditions allow.
     - Turns the target(s) OFF after the selected no-motion time. An optional keep-alive sensor can prevent turn-off while motion continues.
     - Turns the target(s) OFF any target still on at 02:00 as a daily safety measure.
-    - Optional quiet-window behavior blocks motion-triggered turn-on during quiet hours, turns active targets OFF if motion clears before processing, turns targets OFF at quiet-window start when there is no motion, and ON at quiet-window end when motion is detected.
-    - Optional sun-window behavior blocks motion-triggered turn-on during daylight and turns active targets OFF if motion clears before processing. It also turns targets OFF at sunrise when there is no motion and ON at sunset when motion is detected.
+    - Every automatic turn-ON must pass BOTH enabled restrictions: darkness (sunset to sunrise) AND outside the quiet/blocking window. Neither restriction overrides the other.
+    - With the darkness restriction enabled, automatic turn-ON is allowed only from the sunset helper time until the sunrise helper time. Sunrise turns targets OFF only when both motion sensors are clear; sunset requests turn-ON only with main-sensor motion and all restrictions satisfied.
+    - With the quiet restriction enabled, its start/end times define a BLOCKED interval, not an allowed interval. This block applies even during darkness. Its start turns targets OFF only when both motion sensors are clear; its end requests turn-ON only with main-sensor motion and all restrictions satisfied.
+    - The internal brightness window selects the brightness controller only. It is NOT an additional turn-ON permission window.
     - Optional turns targets OFF after Home Assistant restarts when no motion is detected.
     - Optional automatic brightness control for lights works with Prego dynamic brightness and HACS Adaptive Lighting.
 
@@ -80,62 +82,60 @@ blueprint:
       selector:
         boolean:
 
-
-
     quiet_window_schedule:
-      name: Sun and quiet window schedule
+      name: Automatic turn-on restrictions - darkness and quiet hours
       icon: mdi:clock-outline
       description: >
-        Configure sunrise, sunset, and quiet-hour windows, including motion restrictions and optional target actions at their boundaries.
+        Both enabled restrictions must allow turn-on. Darkness permits turn-on; the quiet window blocks it, even at night. Disabling a restriction bypasses only that restriction. These windows do not control the internal brightness schedule.
       collapsed: false
       input:
         # --- Sun-window behavior
         in_enable_sun_window_behavior:
-          name: Enable sun-window behavior
-          description: When enabled, motion does not turn targets on between sunrise and sunset. If motion has cleared by the time a motion-start run is checked, active targets are turned off. Targets also turn off at sunrise when there is no motion and turn on at sunset when motion is detected.
+          name: Allow automatic turn-on only during darkness
+          description: When enabled, ALL automatic turn-on requests require the sunset-to-sunrise interval, including motion and scheduled requests. The quiet-hours block still takes priority when enabled. At sunrise, targets turn off only if both motion sensors are clear. At sunset, main-sensor motion requests turn-on only if all restrictions allow it. When disabled, these helpers do not restrict turn-on or perform boundary actions.
           default: false
           selector:
             boolean: {}
 
         #*** Custum Time Prego
         in_time_morning:
-          name: Sunrise Helper *
-          description: Choose the time helper corresponding to sunrise.
+          name: Sunrise helper - darkness ends *
+          description: Select the input_datetime helper defining the end of darkness. Its time must represent sunrise and be kept up to date externally; selecting it does not calculate sunrise automatically.
           selector:
             entity:
               domain: input_datetime
 
         in_time_night:
-          name: Sunset Helper *
-          description: Choose the time helper corresponding to sunset.
+          name: Sunset helper - darkness starts *
+          description: Select the input_datetime helper defining the start of darkness. Its time must represent sunset and be kept up to date externally; selecting it does not calculate sunset automatically.
           selector:
             entity:
               domain: input_datetime
-        # --- 
+        # ---
 
         # --- Quiet-window behavior
         in_enable_quiet_window_behavior:
-          name: Enable quiet-window behavior
-          description: When enabled, motion does not turn targets on during the quiet window. If motion has cleared by the time a motion-start run is checked, active targets are turned off. Targets also turn off at quiet-window start if there is no motion and turn on at quiet-window end if motion is detected.
+          name: Block automatic turn-on during quiet hours
+          description: When enabled, ALL automatic turn-on requests are blocked from quiet-window start until quiet-window end, EVEN DURING DARKNESS. This is a blocked interval, not an allowed interval. At its start, targets turn off only if both motion sensors are clear. At its end, main-sensor motion requests turn-on only if the darkness restriction and other filters also allow it. When disabled, these times have no blocking or boundary effect.
           default: false
           selector:
             boolean: {}
 
         # Motion config quiet window
         in_quiet_window_start:
-          name: Quiet window start (23:00:00)
-          description: When the quiet window starts. While it is active, motion does not turn on the targets.
+          name: Automatic turn-on blocked from (23:00:00)
+          description: Start of the BLOCKED interval, inclusive. Applied only when the quiet-hours restriction is enabled. May cross midnight; for example, 23:00 to 07:00 blocks overnight.
           default: '23:00:00'
           selector:
             time: {}
 
         in_quiet_window_end:
-          name: Quiet window end (07:00:00)
-          description: When the quiet window ends. Motion can turn on the targets again after this time.
+          name: Automatic turn-on allowed again from (07:00:00)
+          description: End of the BLOCKED interval, exclusive. Turn-on is allowed again only if every other enabled restriction also allows it. This time does not override the darkness restriction.
           default: '07:00:00'
           selector:
             time: {}
-        # --- 
+        # ---
 
     # ─────────────────────────────
     # Internal brightness control
@@ -182,13 +182,13 @@ blueprint:
 
         in_clock_start_brightness:
           name: Internal dynamic brightness start time
-          description: Start time for the internal dynamic brightness calculation.
+          description: Start time for internal dynamic brightness control only. This does not block or permit automatic turn-on.
           default: '20:00:00'
           selector:
             time: {}
         in_clock_end_brightness:
           name: Internal dynamic brightness end time
-          description: End time for the internal dynamic brightness calculation.
+          description: End time for internal dynamic brightness control only. Outside this window, Adaptive Lighting can control brightness; automatic turn-on permissions are unchanged.
           default: '08:00:00'
           selector:
             time: {}
@@ -422,76 +422,6 @@ trigger:
 #---------------
 
 action:
-  #---------------
-  # [Check] Resolve motion start during the sun window
-  #---------------
-  - alias: 'Handle motion start during daylight'
-    if:
-      - alias: 'Triggered by motion start'
-        condition: trigger
-        id:
-          - trigger_motion_start
-      - alias: 'Sun-window behavior is enabled'
-        condition: template
-        value_template: '{{ in_enable_sun_window_behavior | bool }}'
-      - alias: 'Current time is between sunrise and sunset'
-        condition: time
-        after: !input 'in_time_morning'
-        before: !input 'in_time_night'
-    then:
-      - alias: 'Turn off targets if motion cleared before this check'
-        if:
-          - alias: 'Motion sensor is clear'
-            condition: state
-            entity_id: !input 'in_motion_sensor'
-            state: 'off'
-          - alias: 'At least one target is ON'
-            condition: template
-            value_template: '{{ var_bol_any_target_on }}'
-        then:
-          - alias: 'Turn off targets because no motion is detected during daylight'
-            service: homeassistant.turn_off
-            target:
-              entity_id: !input 'in_target_entity_control'
-
-      - alias: 'Stop after handling motion start during daylight'
-        stop: 'The sun window is active; motion-triggered activation is disabled'
-
-  #---------------
-  # [Check] Handle motion start during the quiet window
-  #---------------
-  - alias: 'Handle motion start during quiet hours'
-    if:
-      - alias: 'Triggered by motion start'
-        condition: trigger
-        id:
-          - trigger_motion_start
-      - alias: 'Quiet-window behavior is enabled'
-        condition: template
-        value_template: '{{ in_enable_quiet_window_behavior | bool }}'
-      - alias: 'Current time is inside the quiet window'
-        condition: time
-        after: !input 'in_quiet_window_start'
-        before: !input 'in_quiet_window_end'
-    then:
-      - alias: 'Turn off targets if motion cleared before this check'
-        if:
-          - alias: 'Motion sensor is clear'
-            condition: state
-            entity_id: !input 'in_motion_sensor'
-            state: 'off'
-          - alias: 'At least one target is ON'
-            condition: template
-            value_template: '{{ var_bol_any_target_on }}'
-        then:
-          - alias: 'Turn off targets because no motion is detected during quiet hours'
-            service: homeassistant.turn_off
-            target:
-              entity_id: !input 'in_target_entity_control'
-
-      - alias: 'Stop after handling motion start during quiet hours'
-        stop: 'The quiet window is active; motion-triggered activation is disabled'
-
   #---------------
   # [Check] Synchronize brightness control
   #---------------
@@ -806,6 +736,26 @@ action:
           - condition: template
             value_template: "{{ var_target_action == 'turn_on' }}"
         sequence:
+          - alias: 'Require darkness when the darkness restriction is enabled'
+            condition: or
+            conditions:
+              - condition: template
+                value_template: '{{ not (in_enable_sun_window_behavior | bool) }}'
+              - condition: time
+                after: !input in_time_night
+                before: !input in_time_morning
+
+          - alias: 'Require being outside quiet hours even during darkness'
+            condition: or
+            conditions:
+              - condition: template
+                value_template: '{{ not (in_enable_quiet_window_behavior | bool) }}'
+              - condition: not
+                conditions:
+                  - condition: time
+                    after: !input in_quiet_window_start
+                    before: !input in_quiet_window_end
+
           # External
           #---------------
           # Turn ON using dynamic brightness
