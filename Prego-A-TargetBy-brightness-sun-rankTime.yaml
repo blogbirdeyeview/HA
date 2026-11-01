@@ -6,7 +6,7 @@
 
 # 2026-11-01
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.53
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.54
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -196,12 +196,11 @@ blueprint:
         in_min_brightness_pct:
           name: Minimum dynamic brightness
           description: >-
-            Minimum brightness percentage. Use 0 to inherit the value
-            configured in the selected dynamic brightness script.
-          default: 0
+            Minimum brightness percentage passed to the script.
+          default: 20
           selector:
             number:
-              min: 0
+              min: 1
               max: 100
               step: 1
               mode: slider
@@ -210,12 +209,11 @@ blueprint:
         in_max_brightness_pct:
           name: Maximum dynamic brightness
           description: >-
-            Maximum brightness percentage. Use 0 to inherit the value
-            configured in the selected dynamic brightness script.
-          default: 0
+            Maximum brightness percentage passed to the script.
+          default: 100
           selector:
             number:
-              min: 0
+              min: 1
               max: 100
               step: 1
               mode: slider
@@ -224,14 +222,11 @@ blueprint:
         in_brightness_curve_gamma:
           name: Internal dynamic brightness curve gamma
           description: >-
-            Optional override for the selected script instance. Use 0 to keep
-            its configured default. Values from 0.1 to 5.0 override it. Higher
-            values steepen dimming between the configured minimum and maximum;
-            they do not change either endpoint.
-          default: 0
+            Brightness curve exponent passed to the script. Higher values steepen dimming without changing the configured endpoints.
+          default: 1.0
           selector:
             number:
-              min: 0
+              min: 0.1
               max: 5.0
               step: 0.1
               mode: box
@@ -241,8 +236,7 @@ blueprint:
       name: Light turn-on transition
       description: >-
         Time in seconds for the light to transition to the requested state.
-        Use 0 to inherit the value configured in the selected dynamic
-        brightness script.
+        Zero means no transition. The value is passed directly to the script.
       default: 0
       selector:
         number:

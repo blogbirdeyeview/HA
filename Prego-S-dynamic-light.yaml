@@ -1,8 +1,9 @@
 blueprint:
-  name: Prego Script - Dynamic Light Control  v5.26
+  name: Prego Script - Dynamic Light Control  v5.27
   description: >-
     Turns on selected switches or lights. Lights receive dynamic brightness
     when enabled and supported; switches are turned on without brightness data.
+    All parameters must be supplied by the calling automation. No script defaults are used.
   domain: script
   homeassistant:
     min_version: 2026.6.0
@@ -107,6 +108,7 @@ fields:
       Switches or lights passed by the calling automation. All entities must
       have the same domain. If omitted, use the entities configured in this
       script blueprint.
+    required: true
     selector:
       entity:
         domain:
@@ -118,6 +120,7 @@ fields:
     description: >-
       Time in seconds for the light to transition to the requested state. Use 0
       to inherit the value configured in this script instance.
+    required: true
     selector:
       number:
         min: 0
@@ -128,16 +131,19 @@ fields:
   in_enable_internal_dynamic_brightness:
     name: Enable brightness control
     description: Whether to apply dynamic brightness during the configured time window.
+    required: true
     selector:
       boolean: {}
   in_clock_start_time:
     name: Dynamic light start time
     description: Start time for dynamic brightness.
+    required: true
     selector:
       time: {}
   in_clock_end_time:
     name: Dynamic light end time
     description: End time for dynamic brightness.
+    required: true
     selector:
       time: {}
   in_min_brightness_pct:
@@ -145,9 +151,10 @@ fields:
     description: >-
       Minimum brightness percentage. Use 0 to inherit the value configured in
       this script instance.
+    required: true
     selector:
       number:
-        min: 0
+        min: 1
         max: 100
         step: 1
         mode: slider
@@ -157,35 +164,50 @@ fields:
     description: >-
       Maximum brightness percentage. Use 0 to inherit the value configured in
       this script instance.
+    required: true
     selector:
       number:
-        min: 0
+        min: 1
         max: 100
         step: 1
         mode: slider
         unit_of_measurement: '%'
   in_brightness_curve_gamma:
     name: Brightness curve gamma
-    description: Use 0 to inherit the value configured in this script instance.
+    description: Brightness curve exponent, from 0.1 to 5.0.
+    required: true
     selector:
       number:
-        min: 0
+        min: 0.1
         max: 5.0
         step: 0.1
         mode: box
-
-variables:
-  in_target_entity_control_default: !input in_target_entity_control
 
 #---------------
 # Actions
 #---------------
 
 sequence:
+  - alias: Require all parameters from the calling automation
+    if:
+      - condition: template
+        value_template: >-
+          {{ in_target_entity_control is not defined
+          or in_light_transition_seconds is not defined
+          or in_enable_internal_dynamic_brightness is not defined
+          or in_clock_start_time is not defined
+          or in_clock_end_time is not defined
+          or in_min_brightness_pct is not defined
+          or in_max_brightness_pct is not defined
+          or in_brightness_curve_gamma is not defined }}
+    then:
+      - stop: All eight script parameters must be supplied by the calling automation.
+        error: true
+
   - alias: Resolve the target entities and their domain
     variables:
       var_target_entities: >-
-        {{ in_target_entity_control if in_target_entity_control is defined else in_target_entity_control_default }}
+        {{ in_target_entity_control }}
       var_first_target_entity: >-
         {{ (var_target_entities | trim) if var_target_entities is string else (var_target_entities | default([], true) | first | default('', true)) }}
       var_target_domain: >-
@@ -223,34 +245,16 @@ sequence:
           - condition: template
             value_template: "{{ var_target_domain == 'light' }}"
         sequence:
-          - alias: Resolve light inputs from the caller or blueprint defaults
+          - alias: Use light parameters supplied by the automation
             variables:
-              in_light_transition_seconds_default: !input in_light_transition_seconds
-              in_enable_internal_dynamic_brightness_default: !input in_enable_internal_dynamic_brightness
-              in_clock_start_time_default: !input in_clock_start_time
-              in_clock_end_time_default: !input in_clock_end_time
-              in_min_brightness_pct_default: !input in_min_brightness_pct
-              in_max_brightness_pct_default: !input in_max_brightness_pct
-              in_brightness_curve_gamma_default: !input in_brightness_curve_gamma
-          - variables:
-              var_light_transition_seconds: >-
-                {% set requested = in_light_transition_seconds | default(0) | int(0) %}
-                {{ in_light_transition_seconds_default if requested == 0 else requested }}
-              var_bol_enable_dynamic_brightness: >-
-                {{ in_enable_internal_dynamic_brightness | default(in_enable_internal_dynamic_brightness_default) }}
-              var_clock_start_time: >-
-                {{ in_clock_start_time | default(in_clock_start_time_default, true) }}
-              var_clock_end_time: >-
-                {{ in_clock_end_time | default(in_clock_end_time_default, true) }}
-              var_min_brightness_pct: >-
-                {% set requested = in_min_brightness_pct | default(0) | int(0) %}
-                {{ in_min_brightness_pct_default if requested == 0 else requested }}
-              var_max_brightness_pct: >-
-                {% set requested = in_max_brightness_pct | default(0) | int(0) %}
-                {{ in_max_brightness_pct_default if requested == 0 else requested }}
-              var_brightness_curve_gamma: >-
-                {% set requested = in_brightness_curve_gamma | default(0) | float(0) %}
-                {{ in_brightness_curve_gamma_default if requested == 0 else requested }}
+              var_light_transition_seconds: '{{ in_light_transition_seconds | int }}'
+              var_bol_enable_dynamic_brightness: '{{ in_enable_internal_dynamic_brightness }}'
+              var_clock_start_time: '{{ in_clock_start_time }}'
+              var_clock_end_time: '{{ in_clock_end_time }}'
+              var_min_brightness_pct: '{{ in_min_brightness_pct | float }}'
+              var_max_brightness_pct: '{{ in_max_brightness_pct | float }}'
+              var_brightness_curve_gamma: '{{ in_brightness_curve_gamma | float }}'
+
     default:
       - stop: Target entities must all be switches or all be lights.
         error: true
@@ -307,7 +311,7 @@ sequence:
             )
           )
         }}
-      var_bol_apply_full_brightness: >-
+      var_bol_keep_brightness_outside_window: >-
         {{ var_bol_is_dimmable and var_bol_enable_dynamic_brightness }}
 
   #---------------
@@ -378,7 +382,7 @@ sequence:
           - alias: Log received brightness parameters and calculated level
             action: system_log.write
             data:
-              level: info
+              level: debug
               message: >-
                 Prego dynamic light calculation: received min={{ var_min_brightness_pct }}%,
                 max={{ var_max_brightness_pct }}%, gamma={{ var_brightness_curve_gamma }};
@@ -393,21 +397,21 @@ sequence:
             target:
               entity_id: '{{ var_target_entities }}'
             data:
-              transition: '{{ var_light_transition_seconds | int(2) }}'
+              transition: '{{ var_light_transition_seconds | int }}'
               brightness_pct: '{{ var_calculated_brightness_pct }}'
 
       #---------------
       # Case 2 - Turn ON the light.
       #---------------
-      - alias: Use full brightness outside the window
+      - alias: Keep brightness unchanged outside the window
         conditions:
           - condition: template
-            value_template: '{{ var_bol_apply_full_brightness }}'
+            value_template: '{{ var_bol_keep_brightness_outside_window }}'
         sequence:
-          - alias: Log full-brightness path and received parameters
+          - alias: Log unchanged brightness outside the window
             action: system_log.write
             data:
-              level: info
+              level: debug
               message: >-
                 Prego dynamic light calculation: selected full-brightness path outside the configured window;
                 brightness enabled={{ var_bol_enable_dynamic_brightness }}, dimmable={{ var_bol_is_dimmable }};
@@ -417,11 +421,11 @@ sequence:
                 calculated=unchanged on purpose.
 
           - action: light.turn_on
-            alias: Turn on at full brightness
+            alias: Turn on without changing brightness outside the window
             target:
               entity_id: '{{ var_target_entities }}'
             data:
-              transition: '{{ var_light_transition_seconds | int(2) }}'
+              transition: '{{ var_light_transition_seconds | int }}'
               #brightness_pct: 100
 
     #---------------
@@ -431,7 +435,7 @@ sequence:
       - alias: Log unchanged-brightness path and received parameters
         action: system_log.write
         data:
-          level: info
+          level: debug
           message: >-
             Prego dynamic light calculation: selected unchanged-brightness path;
             brightness enabled={{ var_bol_enable_dynamic_brightness }}, dimmable={{ var_bol_is_dimmable }};
