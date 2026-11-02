@@ -1,15 +1,16 @@
 # 2026-06-28
 # USO - Miguel
 blueprint:
-  name: Prego - Config rank of sunlight - By Sun - Light inside v0.56
+  name: Prego - Config rank of sunlight - By Sun - Light inside v1.57
   description: >
     # 🔆 Config rank of sunlight
 
-    Adjust sunrise and sunset helper times based on sun events and the amount of light inside the house.
+    Calculate custom darkness hours from sunrise/sunset events, base offsets, indoor LDR, and sun elevation.
 
     This blueprint recalculates the morning and night helpers from sunrise/sunset base offsets,
     and optionally readjusts them according to the indoor LDR sensor and a fixed helper with the
-    maximum sun elevation reference for the day.
+    maximum sun elevation reference for the day. If the adjusted sunset is not later than sunrise,
+    sunset is forced to 10 minutes after sunrise to keep the darkness window valid.
 
     Required = *
   domain: automation
@@ -24,15 +25,15 @@ blueprint:
   input:
     #*** Custum Time Prego
     in_time_morning:
-      name: Sunrise Helper *
-      description: Choose the time helper corresponding to sunrise.
+      name: Sunrise time helper (time only) *
+      description: Choose the time-only input_datetime helper that defines when the darkness window ends.
       selector:
         entity:
           domain: input_datetime
 
     in_time_night:
-      name: Sunset Helper *
-      description: Choose the time helper corresponding to sunset.
+      name: Sunset time helper (time only) *
+      description: Choose the time-only input_datetime helper that defines when the darkness window starts.
       selector:
         entity:
           domain: input_datetime
@@ -96,20 +97,24 @@ blueprint:
 #---------------
 
 variables:
+  #--- Critical helper entities and solar event timestamps
   var_sensor_time_morning: !input in_time_morning
   var_sensor_time_night: !input in_time_night
-  var_sensor_ldr: !input in_ldr_sensor
-  var_sensor_max_sun_elevation_yesterday: !input in_max_sun_elevation_yesterday
-
-  var_ldr: '{{ states(var_sensor_ldr) | float(0) }}'
-  var_max_sun_elevation_yesterday: '{{ states(var_sensor_max_sun_elevation_yesterday) | float(0) }}'
-  var_extra_ldr_time: !input in_extra_ldr_time
-  var_extra_sun_elevation_time: !input in_extra_sun_elevation_time
-  var_sun_elevation: "{{ state_attr('sun.sun', 'elevation') | float(0) }}"
-  var_base_offset_morning_minutes: !input in_base_offset_morning_minutes
-  var_base_offset_afternoon_minutes: !input in_base_offset_afternoon_minutes
   var_sunrise_time: "{{ state_attr('sun.sun', 'next_rising') }}"
   var_sunset_time: "{{ state_attr('sun.sun', 'next_setting') }}"
+
+  #--- Sensor entities and current readings
+  var_sensor_ldr: !input in_ldr_sensor
+  var_sensor_max_sun_elevation_yesterday: !input in_max_sun_elevation_yesterday
+  var_ldr: '{{ states(var_sensor_ldr) | float(0) }}'
+  var_max_sun_elevation_yesterday: '{{ states(var_sensor_max_sun_elevation_yesterday) | float(0) }}'
+  var_sun_elevation: "{{ state_attr('sun.sun', 'elevation') | float(0) }}"
+
+  #--- User-defined schedule adjustments
+  var_extra_ldr_time: !input in_extra_ldr_time
+  var_extra_sun_elevation_time: !input in_extra_sun_elevation_time
+  var_base_offset_morning_minutes: !input in_base_offset_morning_minutes
+  var_base_offset_afternoon_minutes: !input in_base_offset_afternoon_minutes
 
 #---------------
 # Triggers
@@ -117,42 +122,53 @@ variables:
 
 trigger:
   - platform: time
+    alias: Daily helper recalculation at 02:30
     at: '02:30:00'
 
   - platform: sun
+    alias: Recalculate 3 hours before sunrise
     event: sunrise
     offset: '-03:00:00'
 
   - platform: sun
+    alias: Recalculate 1 hour 30 minutes before sunrise
     event: sunrise
     offset: '-01:30:00'
 
   - platform: sun
+    alias: Recalculate 30 minutes before sunrise
     event: sunrise
     offset: '-00:30:00'
 
   - platform: time
+    alias: Recalculate at the sunrise helper time
     at: !input in_time_morning
 
   - platform: time
+    alias: Daily afternoon helper recalculation at 14:30
     at: '14:30:00'
 
   - platform: sun
+    alias: Recalculate 3 hours before sunset
     event: sunset
     offset: '-03:00:00'
 
   - platform: sun
+    alias: Recalculate 1 hour 30 minutes before sunset
     event: sunset
     offset: '-01:30:00'
 
   - platform: sun
+    alias: Recalculate 30 minutes before sunset
     event: sunset
     offset: '-00:30:00'
 
   - platform: time
+    alias: Recalculate at the sunset helper time
     at: !input in_time_night
 
   - platform: numeric_state
+    alias: Indoor LDR stayed between 45% and 55% for 5 minutes
     entity_id: !input in_ldr_sensor
     above: 45
     below: 55
@@ -160,30 +176,35 @@ trigger:
       minutes: 5
 
   - platform: numeric_state
+    alias: Indoor LDR stayed below 60% for 2 minutes
     entity_id: !input in_ldr_sensor
     below: 60
     for:
       minutes: 2
 
   - platform: numeric_state
+    alias: Indoor LDR stayed below 40% for 3 minutes
     entity_id: !input in_ldr_sensor
     below: 40
     for:
       minutes: 3
 
   - platform: numeric_state
+    alias: Indoor LDR stayed above 50% for 5 minutes
     entity_id: !input in_ldr_sensor
     above: 50
     for:
       minutes: 5
 
   - platform: numeric_state
+    alias: Indoor LDR stayed above 75% for 5 minutes
     entity_id: !input in_ldr_sensor
     above: 75
     for:
       minutes: 5
 
   - platform: numeric_state
+    alias: Indoor LDR stayed above 90% for 5 minutes
     entity_id: !input in_ldr_sensor
     above: 90
     for:
@@ -198,40 +219,73 @@ trigger:
 #---------------
 
 actions:
-  - variables:
-      morning_base_ts: >
-        {% set offset_seconds = var_base_offset_morning_minutes * 60 %}
-        {{ as_timestamp(var_sunrise_time) + offset_seconds }}
-      #--- Block-var
-      night_base_ts: >
-        {% set offset_seconds = var_base_offset_afternoon_minutes * 60 %}
-        {{ as_timestamp(var_sunset_time) - offset_seconds }}
-      #--- Block-var
-      total_adjustment_seconds: >
-        {% set ldr_offset_minutes = 1 + (var_extra_ldr_time * ((100 - var_ldr) / 100)) %}
-        {% set sun_reference = [var_max_sun_elevation_yesterday | float(0), 1] | max %}
-        {% set sun_ratio = (var_sun_elevation | float(0)) / sun_reference %}
-        {% set sun_ratio = [0, sun_ratio] | max %}
-        {% set sun_ratio = [1, sun_ratio] | min %}
-        {% set sun_elevation_factor = 1 - sun_ratio %}
-        {% set sun_elevation_offset_minutes = var_extra_sun_elevation_time * sun_elevation_factor %}
-        {{ (ldr_offset_minutes + sun_elevation_offset_minutes) * 60 }}
+  - alias: Calculate base timestamps for the sunrise and sunset helpers
+    variables:
+      morning_base_ts: >-
+        {{ as_timestamp(var_sunrise_time) + (var_base_offset_morning_minutes | float(0) * 60) }}
+      night_base_ts: >-
+        {{ as_timestamp(var_sunset_time) - (var_base_offset_afternoon_minutes | float(0) * 60) }}
 
-  - action: input_datetime.set_datetime
+  - alias: Calculate the shared LDR and sun-elevation adjustment
+    variables:
+      ldr_offset_minutes: >-
+        {{ 1 + (var_extra_ldr_time | float(0) * ((100 - (var_ldr | float(0))) / 100)) }}
+      sun_reference: >-
+        {{ [var_max_sun_elevation_yesterday | float(0), 1] | max }}
+      sun_ratio: >-
+        {{ [0, [1, (var_sun_elevation | float(0)) / (sun_reference | float(1))] | min] | max }}
+      sun_elevation_factor: >-
+        {{ 1 - (sun_ratio | float(0)) }}
+      sun_elevation_offset_minutes: >-
+        {{ (var_extra_sun_elevation_time | float(0)) * (sun_elevation_factor | float(0)) }}
+      total_adjustment_seconds: >-
+        {{ ((ldr_offset_minutes | float(0)) + (sun_elevation_offset_minutes | float(0))) * 60 }}
+
+  - alias: Apply the custom adjustments to the sunrise and sunset times
+    variables:
+      sunrise_final_ts: >-
+        {{ (morning_base_ts | float(0)) + (total_adjustment_seconds | float(0)) }}
+      sunset_candidate_ts: >-
+        {{ (night_base_ts | float(0)) - (total_adjustment_seconds | float(0)) }}
+
+  - alias: Format the calculated boundaries as local time-only helper values
+    variables:
+      sunrise_final_time: >-
+        {{ (sunrise_final_ts | float(0)) | timestamp_custom('%H:%M:%S', true) }}
+      sunset_candidate_time: >-
+        {{ (sunset_candidate_ts | float(0)) | timestamp_custom('%H:%M:%S', true) }}
+      sunset_final_time: >-
+        {{ (sunset_candidate_ts | float(0)) | timestamp_custom('%H:%M:%S', true) }}
+
+  - alias: Validate sunset follows sunrise and enforce the 10-minute minimum
+    if:
+      - alias: Calculated sunset time is at or before sunrise time
+        condition: template
+        value_template: >-
+          {% set sunset_parts = sunset_candidate_time.split(':') %}
+          {% set sunrise_parts = sunrise_final_time.split(':') %}
+          {% set sunset_seconds = (sunset_parts[0] | int * 3600) + (sunset_parts[1] | int * 60) + (sunset_parts[2] | int) %}
+          {% set sunrise_seconds = (sunrise_parts[0] | int * 3600) + (sunrise_parts[1] | int * 60) + (sunrise_parts[2] | int) %}
+          {{ sunset_seconds <= sunrise_seconds }}
+    then:
+      - alias: Force sunset to 10 minutes after sunrise
+        variables:
+          sunset_final_time: >-
+            {{ ((sunrise_final_ts | float(0)) + 600) | timestamp_custom('%H:%M:%S', true) }}
+
+  - alias: Set the sunrise helper to its adjusted custom darkness boundary
+    action: input_datetime.set_datetime
     target:
       entity_id: !input in_time_morning
     data:
-      datetime: >
-        {{ ((morning_base_ts | float(0)) + (total_adjustment_seconds | float(0)))
-          | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
+      time: '{{ sunrise_final_time }}'
 
-  - action: input_datetime.set_datetime
+  - alias: Set the sunset helper after validating its order
+    action: input_datetime.set_datetime
     target:
       entity_id: !input in_time_night
     data:
-      datetime: >
-        {{ ((night_base_ts | float(0)) - (total_adjustment_seconds | float(0)))
-          | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}
+      time: '{{ sunset_final_time }}'
 
 #---------------
 # mode
