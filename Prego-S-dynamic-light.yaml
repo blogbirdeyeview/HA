@@ -1,5 +1,5 @@
 blueprint:
-  name: Prego Script - Dynamic Light Control  v5.28
+  name: Prego Script - Dynamic Light Control  v5.29
   description: >-
     Turns on selected switches or lights. Lights receive dynamic brightness
     when enabled and supported; switches are turned on without brightness data.
