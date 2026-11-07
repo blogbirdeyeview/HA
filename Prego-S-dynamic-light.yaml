@@ -118,6 +118,15 @@ sequence:
         {{ (var_target_entities | trim) if var_target_entities is string else (var_target_entities | default([], true) | first | default('', true)) }}
       var_target_domain: >-
         {{ var_first_target_entity.split('.')[0] if '.' in var_first_target_entity else '' }}
+      var_bol_target_domains_mixed: >-
+        {% set targets = [var_target_entities] if var_target_entities is string else (var_target_entities | default([], true)) %}
+        {% set ns = namespace(has_mixed_domains=false) %}
+        {% for entity in targets %}
+          {% if entity.split('.')[0] != var_target_domain %}
+            {% set ns.has_mixed_domains = true %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.has_mixed_domains }}
 
   - alias: Stop when no target entities are provided
     if:
@@ -131,6 +140,24 @@ sequence:
     then:
       - stop: No target entities were provided.
         error: true
+
+  - alias: Stop when target entities mix domains
+    if:
+      - condition: template
+        value_template: "{{ var_bol_target_domains_mixed }}"
+    then:
+      - stop: Target entities must all be switches or all be lights.
+        error: true
+
+  - alias: Prepare light parameters from the calling automation
+    variables:
+      var_light_transition_seconds: '{{ in_light_transition_seconds | int }}'
+      var_bol_enable_dynamic_brightness: '{{ in_enable_internal_dynamic_brightness }}'
+      var_clock_start_time: '{{ in_clock_start_time }}'
+      var_clock_end_time: '{{ in_clock_end_time }}'
+      var_min_brightness_pct: '{{ in_min_brightness_pct | float }}'
+      var_max_brightness_pct: '{{ in_max_brightness_pct | float }}'
+      var_brightness_curve_gamma: '{{ in_brightness_curve_gamma | float }}'
 
   - alias: Choose the target entity domain
     choose:
@@ -150,16 +177,7 @@ sequence:
         conditions:
           - condition: template
             value_template: "{{ var_target_domain == 'light' }}"
-        sequence:
-          - alias: Use light parameters supplied by the automation
-            variables:
-              var_light_transition_seconds: '{{ in_light_transition_seconds | int }}'
-              var_bol_enable_dynamic_brightness: '{{ in_enable_internal_dynamic_brightness }}'
-              var_clock_start_time: '{{ in_clock_start_time }}'
-              var_clock_end_time: '{{ in_clock_end_time }}'
-              var_min_brightness_pct: '{{ in_min_brightness_pct | float }}'
-              var_max_brightness_pct: '{{ in_max_brightness_pct | float }}'
-              var_brightness_curve_gamma: '{{ in_brightness_curve_gamma | float }}'
+        sequence: []
 
     default:
       - stop: Target entities must all be switches or all be lights.
