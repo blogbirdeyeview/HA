@@ -1,9 +1,9 @@
 blueprint:
-  name: Prego Script - Dynamic Light Control  v5.27
+  name: Prego Script - Dynamic Light Control  v5.28
   description: >-
     Turns on selected switches or lights. Lights receive dynamic brightness
     when enabled and supported; switches are turned on without brightness data.
-    All parameters must be supplied by the calling automation. No script defaults are used.
+    All parameters are supplied by the calling automation.
   domain: script
   homeassistant:
     min_version: 2026.6.0
@@ -13,101 +13,12 @@ blueprint:
   # Inputs
   #---------------
 
-  input:
-    targets:
-      name: Targets
-      input:
-        in_target_entity_control:
-          name: Target entities
-          description: >-
-            Select switches or lights, not a mixture. All selected entities
-            must have the same domain.
-          default: []
-          selector:
-            entity:
-              domain:
-                - switch
-                - light
-              multiple: true
-        in_light_transition_seconds:
-          name: Light turn-on transition
-          description: Time in seconds for the light to transition to the requested state.
-          default: 0
-          selector:
-            number:
-              min: 0
-              max: 60
-              step: 1
-              mode: slider
-              unit_of_measurement: s
-    dynamic_brightness:
-      name: Dynamic brightness
-      input:
-        in_enable_internal_dynamic_brightness:
-          name: Enable internal brightness control
-          description: >-
-            If enabled, calculate dynamic brightness during the configured time
-            window. Outside that window, dimmable lights are set to 100%. If
-            disabled, leave brightness unchanged.
-          default: false
-          selector:
-            boolean: {}
-        in_clock_start_time:
-          name: Dynamic light start time
-          description: Time from which dynamic brightness is enabled.
-          default: '20:00:00'
-          selector:
-            time: {}
-        in_clock_end_time:
-          name: Dynamic light end time
-          description: Time until which dynamic brightness is enabled.
-          default: '08:00:00'
-          selector:
-            time: {}
-        in_min_brightness_pct:
-          name: Minimum brightness
-          description: Minimum brightness percentage. Must be at least 1% and no higher than the maximum brightness.
-          default: 20
-          selector:
-            number:
-              min: 1
-              max: 100
-              step: 1
-              mode: slider
-              unit_of_measurement: '%'
-        in_max_brightness_pct:
-          name: Maximum brightness
-          description: Maximum brightness percentage. Must not exceed 100% and must be at least the minimum brightness.
-          default: 100
-          selector:
-            number:
-              min: 1
-              max: 100
-              step: 1
-              mode: slider
-              unit_of_measurement: '%'
-        in_brightness_curve_gamma:
-          name: Brightness curve gamma
-          description: >-
-            Controls the non-linear brightness curve. A value of 1.0 keeps the
-            current linear behavior. Values above 1.0 dim faster as time moves
-            away from solar noon. The configured minimum and maximum remain
-            unchanged.
-          default: 1.0
-          selector:
-            number:
-              min: 0.1
-              max: 5.0
-              step: 0.1
-              mode: box
-
 fields:
   in_target_entity_control:
     name: Target entities
     description: >-
       Switches or lights passed by the calling automation. All entities must
-      have the same domain. If omitted, use the entities configured in this
-      script blueprint.
+      have the same domain.
     required: true
     selector:
       entity:
@@ -118,8 +29,7 @@ fields:
   in_light_transition_seconds:
     name: Light turn-on transition
     description: >-
-      Time in seconds for the light to transition to the requested state. Use 0
-      to inherit the value configured in this script instance.
+      Time in seconds for the light to transition to the requested state.
     required: true
     selector:
       number:
@@ -148,9 +58,7 @@ fields:
       time: {}
   in_min_brightness_pct:
     name: Minimum brightness
-    description: >-
-      Minimum brightness percentage. Use 0 to inherit the value configured in
-      this script instance.
+    description: Minimum brightness percentage.
     required: true
     selector:
       number:
@@ -161,9 +69,7 @@ fields:
         unit_of_measurement: '%'
   in_max_brightness_pct:
     name: Maximum brightness
-    description: >-
-      Maximum brightness percentage. Use 0 to inherit the value configured in
-      this script instance.
+    description: Maximum brightness percentage.
     required: true
     selector:
       number:
