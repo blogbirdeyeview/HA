@@ -4,9 +4,9 @@
 # Based on Prego-A-TargetBy-movement-sun.yaml
 # IMPORTANT: depends on an instance of Prego-S-dynamic-light.yaml (default: script.prego_dynamic_light_control_v4_XX)
 
-# 2026-11-01
+# 2026-11-07
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.55
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.56
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -257,6 +257,25 @@ blueprint:
             - light
           multiple: true
 
+    manual_button:
+      name: Manual button (optional, ZHA)
+      icon: mdi:gesture-tap-button
+      description: >-
+        Configure an optional ZHA button to toggle the targets with one click.
+      collapsed: true
+      input:
+        in_button_zha_device:
+          name: Manual button (ZHA)
+          description: >-
+            Optional ZHA button. A single click toggles the targets: turns them ON if all are off,
+            or OFF if any is on. It ignores darkness, quiet hours, away and stealth restrictions.
+            Leave empty to disable.
+          default: ''
+          selector:
+            device:
+              filter:
+                - integration: zha
+
 #---------------
 # Variables
 #---------------
@@ -276,7 +295,9 @@ variables:
   in_clock_start_brightness: !input in_clock_start_brightness
   in_clock_end_brightness: !input in_clock_end_brightness
   in_dynamic_brightness_script: !input in_dynamic_brightness_script
+  in_button_zha_device: !input in_button_zha_device
   var_target_action: 'none'
+  var_manual: false
   var_dynamic_brightness_script: >-
     {{ in_dynamic_brightness_script | default('script.prego_script_dynamic_light_control_v4_18_2', true) }}
   #--- Block-var
@@ -351,6 +372,15 @@ triggers:
     entity_id: !input 'in_motion_sensor'
     id: trigger_motion_start
     to: 'on'
+
+  - trigger: event
+    alias: ZHA button pressed
+    enabled: "{{ var_button_zha_device != '' }}"
+    event_type: zha_event
+    event_data:
+      device_id: !input in_button_zha_device
+      command: toggle
+    id: trigger_button
 
   - trigger: state
     alias: No motion for the configured timeout
