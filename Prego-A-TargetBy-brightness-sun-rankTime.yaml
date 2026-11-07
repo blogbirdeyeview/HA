@@ -6,7 +6,7 @@
 
 # 2026-11-01
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.54
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.55
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -280,6 +280,9 @@ variables:
   var_dynamic_brightness_script: >-
     {{ in_dynamic_brightness_script | default('script.prego_script_dynamic_light_control_v4_18_2', true) }}
   #--- Block-var
+  # Intentional duplicate of the script's brightness-window check, used only to
+  # synchronize Adaptive Lighting before target-action routing. Keep the same
+  # inclusive start, exclusive end, and cross-midnight behavior.
   var_bol_internal_dynamic_brightness_active: >-
     {% set current_time = now().strftime('%H:%M:%S') %}
     {% set start_time = in_clock_start_brightness %}
@@ -342,21 +345,21 @@ variables:
 # Triggers
 #---------------
 
-trigger:
-  - platform: state
+triggers:
+  - trigger: state
     alias: Motion detected
     entity_id: !input 'in_motion_sensor'
     id: trigger_motion_start
     to: 'on'
 
-  - platform: state
+  - trigger: state
     alias: No motion for the configured timeout
     entity_id: !input 'in_motion_sensor'
     id: trigger_motion_end
     to: 'off'
     for: !input in_inactivity_timeout
 
-  - platform: template
+  - trigger: template
     alias: Keep-alive sensor is clear for the configured timeout
     id: trigger_motion_end_keep_alive
     value_template: >
@@ -367,42 +370,42 @@ trigger:
       {% endif %}
     for: !input in_inactivity_timeout
 
-  - platform: time
+  - trigger: time
     alias: Sunrise
     id: trigger_time_morning
     at: !input 'in_time_morning'
 
-  - platform: time
+  - trigger: time
     alias: Sunset
     id: trigger_time_night
     at: !input 'in_time_night'
 
-  - platform: time
+  - trigger: time
     alias: Quiet window starts
     at: !input in_quiet_window_start
     id: trigger_quiet_window_start
 
-  - platform: time
+  - trigger: time
     alias: Quiet window ends
     at: !input in_quiet_window_end
     id: trigger_quiet_window_end
 
-  - platform: time
+  - trigger: time
     alias: Internal dynamic-brightness window starts
     at: !input in_clock_start_brightness
     id: trigger_internal_brightness_start
 
-  - platform: time
+  - trigger: time
     alias: Internal dynamic-brightness window ends
     at: !input in_clock_end_brightness
     id: trigger_internal_brightness_end
 
-  - platform: time
+  - trigger: time
     alias: Daily 02:00 safety shutdown
     at: '02:00:00'
     id: trigger_time_02am
 
-  - platform: homeassistant
+  - trigger: homeassistant
     alias: Home Assistant started
     event: start
     id: trigger_ha_start
@@ -415,7 +418,7 @@ trigger:
 # Actions
 #---------------
 
-action:
+actions:
   #---------------
   # [Check] Synchronize brightness control
   #---------------
@@ -772,7 +775,7 @@ action:
           - condition: template
             value_template: "{{ var_target_action == 'turn_off' }}"
         sequence:
-          - service: homeassistant.turn_off
+          - action: homeassistant.turn_off
             target:
               entity_id: !input in_target_entity_control
 
@@ -783,7 +786,7 @@ action:
       - condition: template
         value_template: "{{ var_target_action == 'turn_off' }}"
     then:
-      - service: persistent_notification.create
+      - action: persistent_notification.create
         data:
           title: >-
             02:00 safety shutdown executed -
