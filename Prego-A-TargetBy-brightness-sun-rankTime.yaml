@@ -374,13 +374,24 @@ triggers:
     to: 'on'
 
   - trigger: event
-    alias: ZHA button pressed
+    alias: ZHA button single click (toggle command)
     enabled: "{{ var_button_zha_device != '' }}"
     event_type: zha_event
     event_data:
       device_id: !input in_button_zha_device
       command: toggle
-    id: trigger_button
+      args: []
+    id: trigger_button_toggle
+
+  - trigger: event
+    alias: ZHA button single click (value argument)
+    enabled: "{{ var_button_zha_device != '' }}"
+    event_type: zha_event
+    event_data:
+      device_id: !input in_button_zha_device
+      args:
+        value: 1
+    id: trigger_button_value_one
 
   - trigger: state
     alias: No motion for the configured timeout
