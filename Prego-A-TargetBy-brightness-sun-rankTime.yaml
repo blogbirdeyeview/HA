@@ -565,7 +565,8 @@ actions:
             state: 'on'
             # Motion still detected
 
-          - variables:
+          - alias: 'Set the requested target action to turn on'
+            variables:
               var_target_action: 'turn_on'
 
       #---------------
@@ -600,7 +601,8 @@ actions:
             value_template: '{{ not var_bol_motion_sensor_keep_alive }}'
             # Keep-alive sensor is not detecting motion
 
-          - variables:
+          - alias: 'Set the requested target action to turn off'
+            variables:
               var_target_action: 'turn_off'
 
       #---------------
@@ -619,16 +621,20 @@ actions:
         sequence:
           - alias: 'Choose turn OFF if any target is already ON'
             if:
-              - condition: template
+              - alias: 'At least one target is currently on'
+                condition: template
                 value_template: '{{ var_bol_any_target_on }}'
             then:
-              - variables:
+              - alias: 'Set the requested target action to turn off'
+                variables:
                   var_target_action: 'turn_off'
             else:
-              - variables:
+              - alias: 'Set the requested target action to turn on'
+                variables:
                   var_target_action: 'turn_on'
 
-          - variables:
+          - alias: 'Mark this as a manual button action'
+            variables:
               var_manual: true
 
       #---------------
@@ -649,14 +655,17 @@ actions:
             condition: template
             value_template: '{{ var_bol_any_target_on }}'
 
-          - condition: state
+          - alias: 'Main motion sensor is clear'
+            condition: state
             entity_id: !input 'in_motion_sensor'
             state: 'off'
 
-          - condition: template
+          - alias: 'Keep-alive sensor is not detecting motion'
+            condition: template
             value_template: '{{ not var_bol_motion_sensor_keep_alive }}'
 
-          - variables:
+          - alias: 'Set the requested target action to turn off'
+            variables:
               var_target_action: 'turn_off'
 
       #---------------
@@ -686,7 +695,8 @@ actions:
             entity_id: !input 'in_motion_sensor'
             state: 'on'
 
-          - variables:
+          - alias: 'Set the requested target action to turn on'
+            variables:
               var_target_action: 'turn_on'
 
       #---------------
@@ -718,7 +728,8 @@ actions:
             state: 'on'
             # Motion still detected
 
-          - variables:
+          - alias: 'Set the requested target action to turn on'
+            variables:
               var_target_action: 'turn_on'
 
       #---------------
@@ -747,7 +758,8 @@ actions:
             condition: template
             value_template: '{{ var_bol_any_target_on }}'
 
-          - variables:
+          - alias: 'Set the requested target action to turn off'
+            variables:
               var_target_action: 'turn_off'
 
       #---------------
@@ -764,7 +776,8 @@ actions:
             condition: template
             value_template: '{{ var_bol_any_target_on }}'
 
-          - variables:
+          - alias: 'Set the requested target action to turn off'
+            variables:
               var_target_action: 'turn_off'
 
       #---------------
@@ -793,7 +806,8 @@ actions:
             condition: template
             value_template: '{{ var_bol_any_target_on }}'
 
-          - variables:
+          - alias: 'Set the requested target action to turn off'
+            variables:
               var_target_action: 'turn_off'
 
   #---------------
@@ -806,32 +820,39 @@ actions:
       #---------------
       - alias: 'Turn ON targets using the selected brightness method'
         conditions:
-          - condition: template
+          - alias: 'The requested target action is turn on'
+            condition: template
             value_template: "{{ var_target_action == 'turn_on' }}"
         sequence:
           - alias: 'Require darkness when the darkness restriction is enabled'
             condition: or
             conditions:
-              - condition: template
+              - alias: 'The darkness restriction is disabled'
+                condition: template
                 value_template: '{{ not (in_enable_sun_window_behavior | bool) }}'
-              - condition: time
+              - alias: 'Current time is between sunset and sunrise'
+                condition: time
                 after: !input 'in_time_night'
                 before: !input 'in_time_morning'
-              - condition: template
+              - alias: 'The request came from the manual button'
+                condition: template
                 value_template: '{{ var_manual }}'
 
           - alias: 'Require being outside quiet hours even during darkness'
             condition: or
             conditions:
-              - condition: template
+              - alias: 'The quiet-hours restriction is disabled'
+                condition: template
                 value_template: '{{ not (in_enable_quiet_window_behavior | bool) }}'
-              - condition: not
+              - alias: 'Current time is outside the quiet-hours block'
+                condition: not
                 conditions:
                   - alias: 'Current time is inside the quiet window'
                     condition: time
                     after: !input 'in_quiet_window_start'
                     before: !input 'in_quiet_window_end'
-              - condition: template
+              - alias: 'The request came from the manual button'
+                condition: template
                 value_template: '{{ var_manual }}'
 
           # External
@@ -856,10 +877,12 @@ actions:
       #---------------
       - alias: 'Turn off target(s)'
         conditions:
-          - condition: template
+          - alias: 'The requested target action is turn off'
+            condition: template
             value_template: "{{ var_target_action == 'turn_off' }}"
         sequence:
-          - action: homeassistant.turn_off
+          - alias: 'Turn off the selected target(s)'
+            action: homeassistant.turn_off
             target:
               entity_id: !input in_target_entity_control
 
@@ -868,12 +891,15 @@ actions:
   #---------------
   - alias: 'Notify when the daily safety shutdown turns off target(s)'
     if:
-      - condition: trigger
+      - alias: 'Triggered by the daily 02:00 safety timer'
+        condition: trigger
         id: trigger_time_02am
-      - condition: template
+      - alias: 'The safety shutdown selected the turn-off action'
+        condition: template
         value_template: "{{ var_target_action == 'turn_off' }}"
     then:
-      - action: persistent_notification.create
+      - alias: 'Create a notification with the targets turned off'
+        action: persistent_notification.create
         data:
           title: >-
             02:00 safety shutdown executed -
