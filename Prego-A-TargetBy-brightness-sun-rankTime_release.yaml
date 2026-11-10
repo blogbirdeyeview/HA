@@ -3,7 +3,7 @@
 
 # 2026-11-10
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.68
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.69
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -21,7 +21,7 @@ blueprint:
     * Away-from-home and stealth options can prevent automatic turn-ON.
   domain: automation
   homeassistant:
-    min_version: 2026.6.0
+    min_version: 2026.8.0
   # Required section for inputs
   #
   #---------------
