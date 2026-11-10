@@ -6,7 +6,7 @@
 
 # 2026-11-07
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.57
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.61
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -19,6 +19,7 @@ blueprint:
     - The internal brightness window selects the brightness controller only. It is NOT an additional turn-ON permission window.
     - Optional turns targets OFF after Home Assistant restarts when no motion is detected.
     - Optional automatic brightness control for lights works with Prego dynamic brightness and HACS Adaptive Lighting.
+    - An optional ZHA button toggles the targets with a single click, bypassing automatic turn-on restrictions.
 
     * Away-from-home and stealth options can prevent automatic turn-ON.
   domain: automation
@@ -45,6 +46,25 @@ blueprint:
       selector:
         entity:
           domain: binary_sensor
+
+    manual_button:
+      name: Manual button (optional, ZHA)
+      icon: mdi:gesture-tap-button
+      description: >-
+        Configure an optional ZHA button to toggle the targets with one click.
+      collapsed: true
+      input:
+        in_button_zha_device:
+          name: Manual button (ZHA)
+          description: >-
+            Optional ZHA button. A single click toggles the targets: turns them ON if all are off,
+            or OFF if any is on. It ignores darkness, quiet hours, away and stealth restrictions.
+            Leave empty to disable.
+          default: ''
+          selector:
+            device:
+              filter:
+                - integration: zha
 
     in_inactivity_timeout:
       name: No-motion duration
@@ -257,25 +277,6 @@ blueprint:
             - light
           multiple: true
 
-    manual_button:
-      name: Manual button (optional, ZHA)
-      icon: mdi:gesture-tap-button
-      description: >-
-        Configure an optional ZHA button to toggle the targets with one click.
-      collapsed: true
-      input:
-        in_button_zha_device:
-          name: Manual button (ZHA)
-          description: >-
-            Optional ZHA button. A single click toggles the targets: turns them ON if all are off,
-            or OFF if any is on. It ignores darkness, quiet hours, away and stealth restrictions.
-            Leave empty to disable.
-          default: ''
-          selector:
-            device:
-              filter:
-                - integration: zha
-
 #---------------
 # Variables
 #---------------
@@ -286,6 +287,7 @@ trigger_variables:
   var_stealth_mode: !input in_stealth_mode
   var_enable_safeoff_post_restart: !input in_enable_safeoff_post_restart
   var_target_entities: !input in_target_entity_control
+  var_button_zha_device: !input in_button_zha_device
 
 variables:
   in_enable_sun_window_behavior: !input in_enable_sun_window_behavior
@@ -373,6 +375,7 @@ triggers:
     id: trigger_motion_start
     to: 'on'
 
+  #--- Button Start
   - trigger: event
     alias: ZHA button single click (toggle command)
     enabled: "{{ var_button_zha_device != '' }}"
@@ -392,6 +395,7 @@ triggers:
       args:
         value: 1
     id: trigger_button_value_one
+  #--- Button End
 
   - trigger: state
     alias: No motion for the configured timeout
@@ -525,9 +529,9 @@ actions:
                 target:
                   entity_id: '{{ in_adaptive_lighting_adapt_brightness_switch }}'
 
-    #---------------
-    # [Choose Path] Resolve requested target action
-    #---------------
+  #---------------
+  # [Choose Path] Resolve requested target action
+  #---------------
   - alias: 'Resolve the target action for the active trigger'
     choose:
       #---------------
@@ -600,9 +604,37 @@ actions:
               var_target_action: 'turn_off'
 
       #---------------
-      # Case 3 Scheduled - To turn OFF the light when it is daytime.
+      # Case 3 Manual - To toggle the light.
       #---------------
-      - alias: 'Scheduled turn OFF the target - it is already morning!'
+      - alias: 'Toggle targets from the manual ZHA button'
+        conditions:
+          - alias: 'Triggered by the configured ZHA button'
+            condition: trigger
+            id:
+              - trigger_button_toggle
+              - trigger_button_value_one
+          - alias: 'A ZHA button is configured'
+            condition: template
+            value_template: "{{ in_button_zha_device | default('', true) != '' }}"
+        sequence:
+          - alias: 'Turn OFF if any target is already ON'
+            if:
+              - condition: template
+                value_template: '{{ var_bol_any_target_on }}'
+            then:
+              - variables:
+                  var_target_action: 'turn_off'
+            else:
+              - variables:
+                  var_target_action: 'turn_on'
+
+          - variables:
+              var_manual: true
+
+      #---------------
+      # Case 99 Scheduled - To turn OFF the light when it is daytime.
+      #---------------
+      - alias: 'Scheduled - turn OFF the target - it is already morning!'
         conditions:
           - alias: 'Triggered by sunrise'
             condition: trigger
@@ -628,9 +660,9 @@ actions:
               var_target_action: 'turn_off'
 
       #---------------
-      # Case 3 Scheduled - To turn ON at sunset
+      # Case 99 Scheduled - To turn ON at sunset
       #---------------
-      - alias: 'Scheduled turn ON at sunset when motion is detected'
+      - alias: 'Scheduled - turn ON at sunset when motion is detected'
         conditions:
           - alias: 'Triggered by sunset'
             condition: trigger
@@ -658,9 +690,9 @@ actions:
               var_target_action: 'turn_on'
 
       #---------------
-      # Case 3 Scheduled - To turn ON at quiet-window boundaries
+      # Case 99 Scheduled - To turn ON at quiet-window boundaries
       #---------------
-      - alias: 'Scheduled turn ON at quiet-window end when motion is detected'
+      - alias: 'Scheduled - turn ON at quiet-window end when motion is detected'
         conditions:
           - alias: 'Triggered by quiet-window end'
             condition: trigger
@@ -690,9 +722,9 @@ actions:
               var_target_action: 'turn_on'
 
       #---------------
-      # Case 3 Scheduled - To turn OFF at quiet-window boundaries
+      # Case 99 Scheduled - To turn OFF at quiet-window boundaries
       #---------------
-      - alias: 'Scheduled turn OFF at quiet-window start when there is no motion'
+      - alias: 'Scheduled - turn OFF at quiet-window start when there is no motion'
         conditions:
           - alias: 'Triggered by quiet-window start'
             condition: trigger
@@ -721,7 +753,7 @@ actions:
       #---------------
       # Case SAFE - Daily safety shutdown at 02:00
       #---------------
-      - alias: '02:00 safety shutdown: turn OFF target(s)'
+      - alias: 'SAFE - 02:00 safety shutdown: turn OFF target(s)'
         conditions:
           - alias: 'Triggered by the 02:00 safety timer'
             condition: trigger
@@ -738,7 +770,7 @@ actions:
       #---------------
       # Case SAFE - SafeOff after Home Assistant restart
       #---------------
-      - alias: 'Post-restart SafeOff: turn OFF target(s)'
+      - alias: 'SAFE - Post-restart SafeOff: turn OFF target(s)'
         conditions:
           - alias: 'Triggered by Home Assistant startup'
             condition: trigger
@@ -782,6 +814,8 @@ actions:
               - condition: time
                 after: !input in_time_night
                 before: !input in_time_morning
+              - condition: template
+                value_template: '{{ var_manual }}'
 
           - alias: 'Require being outside quiet hours even during darkness'
             condition: or
@@ -793,6 +827,8 @@ actions:
                   - condition: time
                     after: !input in_quiet_window_start
                     before: !input in_quiet_window_end
+              - condition: template
+                value_template: '{{ var_manual }}'
 
           # External
           #---------------
