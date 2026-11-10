@@ -6,7 +6,7 @@
 
 # 2026-11-07
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.61
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.62
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -19,7 +19,7 @@ blueprint:
     - The internal brightness window selects the brightness controller only. It is NOT an additional turn-ON permission window.
     - Optional turns targets OFF after Home Assistant restarts when no motion is detected.
     - Optional automatic brightness control for lights works with Prego dynamic brightness and HACS Adaptive Lighting.
-    - An optional ZHA button toggles the targets with a single click, bypassing automatic turn-on restrictions.
+    - Optional ZHA button toggles the targets with a single click, bypassing automatic turn-on restrictions.
 
     * Away-from-home and stealth options can prevent automatic turn-ON.
   domain: automation
@@ -46,25 +46,6 @@ blueprint:
       selector:
         entity:
           domain: binary_sensor
-
-    manual_button:
-      name: Manual button (optional, ZHA)
-      icon: mdi:gesture-tap-button
-      description: >-
-        Configure an optional ZHA button to toggle the targets with one click.
-      collapsed: true
-      input:
-        in_button_zha_device:
-          name: Manual button (ZHA)
-          description: >-
-            Optional ZHA button. A single click toggles the targets: turns them ON if all are off,
-            or OFF if any is on. It ignores darkness, quiet hours, away and stealth restrictions.
-            Leave empty to disable.
-          default: ''
-          selector:
-            device:
-              filter:
-                - integration: zha
 
     in_inactivity_timeout:
       name: No-motion duration
@@ -102,12 +83,31 @@ blueprint:
       selector:
         boolean:
 
-    quiet_window_schedule:
+    collapsed_manual_button:
+      name: Manual button
+      icon: mdi:gesture-tap-button
+      description: >-
+        Configure an optional ZHA button to toggle the targets with one click.
+      collapsed: true
+      input:
+        in_button_zha_device:
+          name: Manual button (ZHA)
+          description: >-
+            Optional ZHA button. A single click toggles the targets: turns them ON if all are off,
+            or OFF if any is on. It ignores darkness, quiet hours, away and stealth restrictions.
+            Leave empty to disable.
+          default: ''
+          selector:
+            device:
+              filter:
+                - integration: zha
+
+    collapsed_quiet_window_schedule:
       name: Automatic turn-on restrictions - darkness and quiet hours
       icon: mdi:clock-outline
       description: >
         Both enabled restrictions must allow turn-on. Darkness permits turn-on; the quiet window blocks it, even at night. Disabling a restriction bypasses only that restriction. These windows do not control the internal brightness schedule.
-      collapsed: false
+      collapsed: true
       input:
         # --- Sun-window behavior
         in_enable_sun_window_behavior:
@@ -161,7 +161,7 @@ blueprint:
     # Internal brightness control
     # ─────────────────────────────
     # collapsed Dynamic internal brightness - START
-    advanced_brightness:
+    collapsed_advanced_brightness:
       name: Internal brightness control
       icon: mdi:brightness-auto
       description: >
@@ -617,7 +617,7 @@ actions:
             condition: template
             value_template: "{{ in_button_zha_device | default('', true) != '' }}"
         sequence:
-          - alias: 'Turn OFF if any target is already ON'
+          - alias: 'Choose turn OFF if any target is already ON'
             if:
               - condition: template
                 value_template: '{{ var_bol_any_target_on }}'
@@ -801,7 +801,10 @@ actions:
   #---------------
   - alias: 'Execute the resolved target action'
     choose:
-      - alias: 'Turn on targets using the selected brightness method'
+      #---------------
+      # Case ON
+      #---------------
+      - alias: 'Turn ON targets using the selected brightness method'
         conditions:
           - condition: template
             value_template: "{{ var_target_action == 'turn_on' }}"
@@ -812,8 +815,8 @@ actions:
               - condition: template
                 value_template: '{{ not (in_enable_sun_window_behavior | bool) }}'
               - condition: time
-                after: !input in_time_night
-                before: !input in_time_morning
+                after: !input 'in_time_night'
+                before: !input 'in_time_morning'
               - condition: template
                 value_template: '{{ var_manual }}'
 
@@ -824,9 +827,10 @@ actions:
                 value_template: '{{ not (in_enable_quiet_window_behavior | bool) }}'
               - condition: not
                 conditions:
-                  - condition: time
-                    after: !input in_quiet_window_start
-                    before: !input in_quiet_window_end
+                  - alias: 'Current time is inside the quiet window'
+                    condition: time
+                    after: !input 'in_quiet_window_start'
+                    before: !input 'in_quiet_window_end'
               - condition: template
                 value_template: '{{ var_manual }}'
 
@@ -847,6 +851,9 @@ actions:
               in_brightness_curve_gamma: !input in_brightness_curve_gamma
               in_light_transition_seconds: !input in_light_transition_seconds
 
+      #---------------
+      # Case OFF
+      #---------------
       - alias: 'Turn off target(s)'
         conditions:
           - condition: template
@@ -856,6 +863,9 @@ actions:
             target:
               entity_id: !input in_target_entity_control
 
+  #---------------
+  # Case Notify
+  #---------------
   - alias: 'Notify when the daily safety shutdown turns off target(s)'
     if:
       - condition: trigger
