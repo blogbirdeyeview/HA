@@ -6,7 +6,7 @@
 
 # 2026-11-07
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.62
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.65
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
