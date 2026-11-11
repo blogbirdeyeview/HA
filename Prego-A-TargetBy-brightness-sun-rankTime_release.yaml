@@ -3,7 +3,7 @@
 
 # 2026-11-10
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.69
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.70
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -121,9 +121,6 @@ blueprint:
             Select the input_datetime helper defining the end of darkness. Its time must represent sunrise and be kept up to date externally; selecting it does not calculate sunrise automatically.
             Leave empty when it is disabled.
           default: ''
-          visible:
-            field: in_enable_sun_window_behavior
-            value: true
           selector:
             entity:
               domain: input_datetime
@@ -134,9 +131,6 @@ blueprint:
             Select the input_datetime helper defining the start of darkness. Its time must represent sunset and be kept up to date externally; selecting it does not calculate sunset automatically.
             Leave empty when it is disabled.
           default: ''
-          visible:
-            field: in_enable_sun_window_behavior
-            value: true
           selector:
             entity:
               domain: input_datetime
