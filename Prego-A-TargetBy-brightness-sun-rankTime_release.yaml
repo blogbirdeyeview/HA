@@ -3,7 +3,7 @@
 
 # 2026-11-10
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.86
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.87
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -696,15 +696,6 @@ actions:
             condition: template
             value_template: "{{ in_button_zha_device | default('', true) != '' }}"
         sequence:
-          - alias: 'Capture the ZHA button event data for this trace'
-            variables:
-              internal_button_event_data: '{{ trigger.event.data }}'
-              internal_button_event_command: "{{ trigger.event.data.command | default('not_provided', true) }}"
-
-          - alias: 'Skip the SNZB-01P double-click ON event'
-            condition: template
-            value_template: "{{ internal_button_event_command != 'on' }}"
-
           - alias: 'Choose turn OFF if any target is already ON'
             if:
               - alias: 'At least one target is currently on'
@@ -731,37 +722,8 @@ actions:
           - alias: 'Triggered by the Aqara double-click device trigger'
             condition: trigger
             id:
-              - trigger_button_value_two
-          - alias: 'A ZHA button is configured'
-            condition: template
-            value_template: "{{ in_button_zha_device | default('', true) != '' }}"
-        sequence:
-          - alias: 'NOT snzb01p'
-            condition: template
-            value_template: '{{ not var_bol_button_device_is_snzb01p }}'
-
-          - alias: 'Set the requested target action to turn on'
-            variables:
-              var_target_action: 'turn_on'
-
-          - alias: 'Mark this as a manual button action'
-            variables:
-              var_manual: true
-
-          - alias: 'Disable dynamic and low brightness modes for this action'
-            variables:
-              var_bol_enable_internal_dynamic_brightness: false
-              var_bol_low_brightness_mode: false
-
-      #---------------
-      # Case 5 Manual - To turn ON at 100% from an SNZB-01P double click.
-      #---------------
-      - alias: 'Turn ON targets at 100% from the SNZB-01P double-click trigger'
-        conditions:
-          - alias: 'Triggered by the SNZB-01P double-click device trigger'
-            condition: trigger
-            id:
               - trigger_button_snzb_double_click
+              - trigger_button_value_two
           - alias: 'A ZHA button is configured'
             condition: template
             value_template: "{{ in_button_zha_device | default('', true) != '' }}"
