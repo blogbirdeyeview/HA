@@ -3,7 +3,7 @@
 
 # 2026-11-10
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.84
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.85
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -424,22 +424,24 @@ triggers:
       command: 'on'
     id: trigger_button_snzb_double_click
 
-  - trigger: device
-    alias: Aqara ZHA button single click
+  - trigger: event
+    alias: ZHA button single click (value argument)
     enabled: "{{ var_button_zha_device != '' }}"
-    device_id: !input in_button_zha_device
-    domain: zha
-    type: remote_button_short_press
-    subtype: remote_button_short_press
+    event_type: zha_event
+    event_data:
+      device_id: !input in_button_zha_device
+      args:
+        value: 1
     id: trigger_button_value_one
 
-  - trigger: device
-    alias: Aqara ZHA button double click
+  - trigger: event
+    alias: ZHA button double click (value argument)
     enabled: "{{ var_button_zha_device != '' }}"
-    device_id: !input in_button_zha_device
-    domain: zha
-    type: remote_button_double_press
-    subtype: remote_button_double_press
+    event_type: zha_event
+    event_data:
+      device_id: !input in_button_zha_device
+      args:
+        value: 2
     id: trigger_button_value_two
   #--- Button End
 
