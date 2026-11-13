@@ -6,7 +6,7 @@
 
 # 2026-11-07
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.66
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.67
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -119,27 +119,15 @@ blueprint:
 
         #*** Custum Time Prego
         in_time_morning:
-          name: Sunrise helper - darkness ends (optional)
-          description: >-
-            Select the input_datetime helper defining the end of darkness. Its time must represent sunrise and be kept up to date externally; selecting it does not calculate sunrise automatically.
-            Leave empty when it is disabled.
-          default: ''
-          visible:
-            field: in_enable_sun_window_behavior
-            value: true
+          name: Sunrise helper - darkness ends *
+          description: Select the input_datetime helper defining the end of darkness. Its time must represent sunrise and be kept up to date externally; selecting it does not calculate sunrise automatically.
           selector:
             entity:
               domain: input_datetime
 
         in_time_night:
-          name: Sunset helper - darkness starts (optional)
-          description: >-
-            Select the input_datetime helper defining the start of darkness. Its time must represent sunset and be kept up to date externally; selecting it does not calculate sunset automatically.
-            Leave empty when it is disabled.
-          default: ''
-          visible:
-            field: in_enable_sun_window_behavior
-            value: true
+          name: Sunset helper - darkness starts *
+          description: Select the input_datetime helper defining the start of darkness. Its time must represent sunset and be kept up to date externally; selecting it does not calculate sunset automatically.
           selector:
             entity:
               domain: input_datetime
@@ -298,16 +286,11 @@ trigger_variables:
   var_away_from_home: !input in_away_from_home
   var_stealth_mode: !input in_stealth_mode
   var_enable_safeoff_post_restart: !input in_enable_safeoff_post_restart
-  var_sun_window_behavior_enabled: !input in_enable_sun_window_behavior
-  var_sunrise_helper: !input in_time_morning
-  var_sunset_helper: !input in_time_night
   var_target_entities: !input in_target_entity_control
   var_button_zha_device: !input in_button_zha_device
 
 variables:
   in_enable_sun_window_behavior: !input in_enable_sun_window_behavior
-  in_time_morning: !input in_time_morning
-  in_time_night: !input in_time_night
   in_enable_quiet_window_behavior: !input in_enable_quiet_window_behavior
   in_enable_internal_dynamic_brightness: !input in_enable_internal_dynamic_brightness
   in_adaptive_lighting_adapt_brightness_switch: !input in_adaptive_lighting_adapt_brightness_switch
@@ -434,19 +417,13 @@ triggers:
 
   - trigger: time
     alias: Sunrise
-    enabled: >-
-      {{ var_sun_window_behavior_enabled | bool
-        and var_sunrise_helper | default('', true) != '' }}
     id: trigger_time_morning
-    at: '{{ var_sunrise_helper }}'
+    at: !input 'in_time_morning'
 
   - trigger: time
     alias: Sunset
-    enabled: >-
-      {{ var_sun_window_behavior_enabled | bool
-        and var_sunset_helper | default('', true) != '' }}
     id: trigger_time_night
-    at: '{{ var_sunset_helper }}'
+    at: !input 'in_time_night'
 
   - trigger: time
     alias: Quiet window starts
@@ -672,14 +649,6 @@ actions:
           - alias: 'Sun-window behavior is enabled'
             condition: template
             value_template: '{{ in_enable_sun_window_behavior | bool }}'
-          - alias: 'Sunrise helper has a valid time'
-            condition: template
-            value_template: >-
-              {{ in_time_morning | default('', true) != ''
-              and states(in_time_morning) not in
-              ['unknown', 'unavailable']
-              and state_attr(in_time_morning, 'has_time')
-              | default(false) | bool }}
 
         sequence:
           - alias: 'Check: at least one target is ON'
@@ -711,14 +680,6 @@ actions:
           - alias: 'Sun-window behavior is enabled'
             condition: template
             value_template: '{{ in_enable_sun_window_behavior | bool }}'
-          - alias: 'Sunset helper has a valid time'
-            condition: template
-            value_template: >-
-              {{ in_time_night | default('', true) != ''
-              and states(in_time_night) not in
-              ['unknown', 'unavailable']
-              and state_attr(in_time_night, 'has_time')
-              | default(false) | bool }}
 
         sequence:
           - alias: 'Someone is home'
