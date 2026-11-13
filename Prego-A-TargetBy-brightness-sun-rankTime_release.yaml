@@ -3,7 +3,7 @@
 
 # 2026-11-10
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.78
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.79
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -400,14 +400,14 @@ triggers:
 
   #--- Button Start
   - trigger: event
-    alias: ZHA button single click (toggle command)
+    alias: ZHA button single click (SNZB-01P toggle command)
     enabled: "{{ var_button_zha_device != '' }}"
     event_type: zha_event
     event_data:
       device_id: !input in_button_zha_device
       command: toggle
       args: []
-    id: trigger_button_toggle
+    id: trigger_button_snzb_toggle
 
   - trigger: event
     alias: ZHA button double click (SNZB-01P ON command)
@@ -419,23 +419,21 @@ triggers:
     id: trigger_button_snzb_double_click
 
   - trigger: event
-    alias: ZHA button single click (Aqara short-press command)
+    alias: ZHA button single click (value argument)
     enabled: "{{ var_button_zha_device != '' }}"
     event_type: zha_event
     event_data:
       device_id: !input in_button_zha_device
-      command: remote_button_short_press
       args:
         value: 1
     id: trigger_button_value_one
 
   - trigger: event
-    alias: ZHA button double click (Aqara double-press command)
+    alias: ZHA button double click (value argument)
     enabled: "{{ var_button_zha_device != '' }}"
     event_type: zha_event
     event_data:
       device_id: !input in_button_zha_device
-      command: remote_button_double_press
       args:
         value: 2
     id: trigger_button_value_two
@@ -670,8 +668,11 @@ actions:
           - alias: 'Triggered by the configured ZHA button'
             condition: trigger
             id:
-              - trigger_button_toggle
+              - trigger_button_snzb_toggle
               - trigger_button_value_one
+          - alias: 'The event is not the SNZB-01P double-click ON command'
+            condition: template
+            value_template: "{{ (trigger.event.data.command | default('', true)) != 'on' }}"
           - alias: 'A ZHA button is configured'
             condition: template
             value_template: "{{ in_button_zha_device | default('', true) != '' }}"
