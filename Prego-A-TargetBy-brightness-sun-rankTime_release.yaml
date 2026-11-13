@@ -3,7 +3,7 @@
 
 # 2026-11-10
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.76
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.77
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -44,19 +44,18 @@ blueprint:
         entity:
           domain: binary_sensor
 
-    input:
-      in_button_zha_device:
-        name: Manual button (ZHA)
-        description: >-
-          Optional ZHA button. A single click toggles the targets: turns them ON if all are off,
-          or OFF if any is on. A double click turns the targets ON at 100%. Both actions ignore
-          darkness, quiet hours, away and stealth restrictions.
-          Leave empty to disable.
-        default: ''
-        selector:
-          device:
-            filter:
-              - integration: zha
+    in_button_zha_device:
+      name: Manual button (ZHA)
+      description: >-
+        Optional ZHA button. A single click toggles the targets: turns them ON if all are off,
+        or OFF if any is on. A double click turns the targets ON at 100%. Both actions ignore
+        darkness, quiet hours, away and stealth restrictions.
+        Leave empty to disable.
+      default: ''
+      selector:
+        device:
+          filter:
+            - integration: zha
 
     in_inactivity_timeout:
       name: No-motion duration
