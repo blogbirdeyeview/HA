@@ -4,9 +4,9 @@
 # Based on Prego-A-TargetBy-movement-sun.yaml
 # IMPORTANT: depends on an instance of Prego-S-dynamic-light.yaml (default: script.prego_dynamic_light_control_v4_XX)
 
-# 2026-11-07
+# 2026-11-10
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.67
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v4.77
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -19,12 +19,12 @@ blueprint:
     - The internal brightness window selects the brightness controller only. It is NOT an additional turn-ON permission window.
     - Optional turns targets OFF after Home Assistant restarts when no motion is detected.
     - Optional automatic brightness control for lights works with Prego dynamic brightness and HACS Adaptive Lighting.
-    - Optional ZHA button toggles the targets with a single click, bypassing automatic turn-on restrictions.
+    - Optional ZHA button toggles the targets with a single click or turns them ON at 100% with a double click.
 
     * Away-from-home and stealth options can prevent automatic turn-ON.
   domain: automation
   homeassistant:
-    min_version: 2026.6.0
+    min_version: 2026.8.0
   # Required section for inputs
   #
   #---------------
@@ -46,6 +46,19 @@ blueprint:
       selector:
         entity:
           domain: binary_sensor
+
+    in_button_zha_device:
+      name: Manual button (ZHA)
+      description: >-
+        Optional ZHA button. A single click toggles the targets: turns them ON if all are off,
+        or OFF if any is on. A double click turns the targets ON at 100%. Both actions ignore
+        darkness, quiet hours, away and stealth restrictions.
+        Leave empty to disable.
+      default: ''
+      selector:
+        device:
+          filter:
+            - integration: zha
 
     in_inactivity_timeout:
       name: No-motion duration
@@ -83,25 +96,6 @@ blueprint:
       selector:
         boolean:
 
-    collapsed_manual_button:
-      name: Manual button
-      icon: mdi:gesture-tap-button
-      description: >-
-        Configure an optional ZHA button to toggle the targets with one click.
-      collapsed: true
-      input:
-        in_button_zha_device:
-          name: Manual button (ZHA)
-          description: >-
-            Optional ZHA button. A single click toggles the targets: turns them ON if all are off,
-            or OFF if any is on. It ignores darkness, quiet hours, away and stealth restrictions.
-            Leave empty to disable.
-          default: ''
-          selector:
-            device:
-              filter:
-                - integration: zha
-
     collapsed_quiet_window_schedule:
       name: Automatic turn-on restrictions - darkness and quiet hours
       icon: mdi:clock-outline
@@ -119,15 +113,21 @@ blueprint:
 
         #*** Custum Time Prego
         in_time_morning:
-          name: Sunrise helper - darkness ends *
-          description: Select the input_datetime helper defining the end of darkness. Its time must represent sunrise and be kept up to date externally; selecting it does not calculate sunrise automatically.
+          name: Sunrise helper - darkness ends (optional)
+          description: >-
+            Select the input_datetime helper defining the end of darkness. Its time must represent sunrise and be kept up to date externally; selecting it does not calculate sunrise automatically.
+            Leave empty to use input_datetime.prego_sunrise.
+          default: ''
           selector:
             entity:
               domain: input_datetime
 
         in_time_night:
-          name: Sunset helper - darkness starts *
-          description: Select the input_datetime helper defining the start of darkness. Its time must represent sunset and be kept up to date externally; selecting it does not calculate sunset automatically.
+          name: Sunset helper - darkness starts (optional)
+          description: >-
+            Select the input_datetime helper defining the start of darkness. Its time must represent sunset and be kept up to date externally; selecting it does not calculate sunset automatically.
+            Leave empty to use input_datetime.prego_sunset.
+          default: ''
           selector:
             entity:
               domain: input_datetime
@@ -170,7 +170,7 @@ blueprint:
       input:
         in_enable_internal_dynamic_brightness:
           name: Enable internal brightness control (internal-brightness)
-          description: If enabled, the internal script controls brightness during its configured window and HACS Adaptive Lighting controls it outside that window. If disabled, the script leaves brightness unchanged and the selected HACS switch is enabled.
+          description: If enabled, the internal script controls brightness during its configured window and HACS Adaptive Lighting controls it outside that window. The optional low-brightness mode also uses the internal script outside the window while its helper is ON. If disabled, dimmable lights use 100% brightness and the selected HACS switch remains available for regular runs.
           default: false
           selector:
             boolean: {}
@@ -199,6 +199,15 @@ blueprint:
             entity:
               filter:
                 - domain: script
+
+        in_low_brightness_mode:
+          name: Low brightness mode
+          description: >-
+            Optional input_boolean helper, such as input_boolean.low_brightness_mode. When ON, dynamic brightness also applies outside its configured time window and uses a stronger darkness factor. Leave empty to disable.
+          default: ''
+          selector:
+            entity:
+              domain: input_boolean
 
         in_clock_start_brightness:
           name: Internal dynamic brightness start time
@@ -286,13 +295,19 @@ trigger_variables:
   var_away_from_home: !input in_away_from_home
   var_stealth_mode: !input in_stealth_mode
   var_enable_safeoff_post_restart: !input in_enable_safeoff_post_restart
+  var_sun_window_behavior_enabled: !input in_enable_sun_window_behavior
+  var_sunrise_helper: !input in_time_morning
+  var_sunset_helper: !input in_time_night
   var_target_entities: !input in_target_entity_control
   var_button_zha_device: !input in_button_zha_device
 
 variables:
   in_enable_sun_window_behavior: !input in_enable_sun_window_behavior
+  in_time_morning: !input in_time_morning
+  in_time_night: !input in_time_night
   in_enable_quiet_window_behavior: !input in_enable_quiet_window_behavior
   in_enable_internal_dynamic_brightness: !input in_enable_internal_dynamic_brightness
+  in_low_brightness_mode: !input in_low_brightness_mode
   in_adaptive_lighting_adapt_brightness_switch: !input in_adaptive_lighting_adapt_brightness_switch
   in_clock_start_brightness: !input in_clock_start_brightness
   in_clock_end_brightness: !input in_clock_end_brightness
@@ -304,17 +319,28 @@ variables:
     {{ in_dynamic_brightness_script | default('script.prego_script_dynamic_light_control_v4_18_2', true) }}
   #--- Block-var
   # Intentional duplicate of the script's brightness-window check, used only to
-  # synchronize Adaptive Lighting before target-action routing. Keep the same
-  # inclusive start, exclusive end, and cross-midnight behavior.
+  # synchronize Adaptive Lighting before target-action routing. It also honors
+  # low-brightness mode and keeps the same window boundary semantics.
+  var_bol_low_brightness_mode: >-
+    {% set temp_low_brightness_entity_id = in_low_brightness_mode | default('', true) %}
+    {{ temp_low_brightness_entity_id != '' and is_state(temp_low_brightness_entity_id, 'on') }}
+  var_bol_enable_internal_dynamic_brightness: !input in_enable_internal_dynamic_brightness
+  #--- Block-var
   var_bol_internal_dynamic_brightness_active: >-
-    {% set current_time = now().strftime('%H:%M:%S') %}
-    {% set start_time = in_clock_start_brightness %}
-    {% set end_time = in_clock_end_brightness %}
+    {% set temp_current_time = now().strftime('%H:%M:%S') %}
+    {% set temp_brightness_window_start_time = in_clock_start_brightness %}
+    {% set temp_brightness_window_end_time = in_clock_end_brightness %}
+    {% set temp_low_brightness_entity_id = in_low_brightness_mode | default('', true) %}
+    {% set temp_low_brightness_mode_enabled = temp_low_brightness_entity_id != '' and is_state(temp_low_brightness_entity_id, 'on') %}
     {{
-      in_enable_internal_dynamic_brightness | bool
-      and (
-        (start_time < end_time and current_time >= start_time and current_time < end_time)
-        or (start_time > end_time and (current_time >= start_time or current_time < end_time))
+      (trigger is defined and (trigger.id | default('')) == 'trigger_button_value_two')
+      or (
+        in_enable_internal_dynamic_brightness | bool
+        and (
+          temp_low_brightness_mode_enabled
+          or (temp_brightness_window_start_time < temp_brightness_window_end_time and temp_current_time >= temp_brightness_window_start_time and temp_current_time < temp_brightness_window_end_time)
+          or (temp_brightness_window_start_time > temp_brightness_window_end_time and (temp_current_time >= temp_brightness_window_start_time or temp_current_time < temp_brightness_window_end_time))
+        )
       )
     }}
   #--- Block-var
@@ -358,11 +384,11 @@ variables:
     | count > 0 }}
   #--- Block-var
   var_target_entities_on_names: >-
-    {% set ns = namespace(items=[]) %}
+    {% set temp_target_name_list = namespace(temp_entity_names=[]) %}
     {% for entity in expand(var_target_entities) if entity.state == 'on' %}
-      {% set ns.items = ns.items + [entity.name ~ ' (' ~ entity.entity_id ~ ')'] %}
+      {% set temp_target_name_list.temp_entity_names = temp_target_name_list.temp_entity_names + [entity.name ~ ' (' ~ entity.entity_id ~ ')'] %}
     {% endfor %}
-    {{ ns.items | join(', ') }}
+    {{ temp_target_name_list.temp_entity_names | join(', ') }}
 
 #---------------
 # Triggers
@@ -395,6 +421,16 @@ triggers:
       args:
         value: 1
     id: trigger_button_value_one
+
+  - trigger: event
+    alias: ZHA button double click (value argument)
+    enabled: "{{ var_button_zha_device != '' }}"
+    event_type: zha_event
+    event_data:
+      device_id: !input in_button_zha_device
+      args:
+        value: 2
+    id: trigger_button_value_two
   #--- Button End
 
   - trigger: state
@@ -417,13 +453,19 @@ triggers:
 
   - trigger: time
     alias: Sunrise
+    enabled: >-
+      {{ var_sun_window_behavior_enabled | bool }}
     id: trigger_time_morning
-    at: !input 'in_time_morning'
+    at: >-
+      {{ var_sunrise_helper | default('input_datetime.prego_sunrise', true) }}
 
   - trigger: time
     alias: Sunset
+    enabled: >-
+      {{ var_sun_window_behavior_enabled | bool }}
     id: trigger_time_night
-    at: !input 'in_time_night'
+    at: >-
+      {{ var_sunset_helper | default('input_datetime.prego_sunset', true) }}
 
   - trigger: time
     alias: Quiet window starts
@@ -464,6 +506,13 @@ triggers:
 #---------------
 
 actions:
+  - alias: 'Resolve sunrise and sunset helper entities'
+    variables:
+      var_sunrise_helper: >-
+        {{ in_time_morning | default('input_datetime.prego_sunrise', true) }}
+      var_sunset_helper: >-
+        {{ in_time_night | default('input_datetime.prego_sunset', true) }}
+
   #---------------
   # [Check] Synchronize brightness control
   #---------------
@@ -472,18 +521,18 @@ actions:
       - alias: 'The selected Adaptive Lighting switch exists and is available'
         condition: template
         value_template: >-
-          {% set adaptive_switch = in_adaptive_lighting_adapt_brightness_switch | default('', true) %}
+          {% set internal_adaptive_lighting_switch_entity_id = in_adaptive_lighting_adapt_brightness_switch | default('', true) %}
           {{
-            adaptive_switch != ''
-            and adaptive_switch.split('.')[0] == 'switch'
-            and states(adaptive_switch) in ['on', 'off']
+            internal_adaptive_lighting_switch_entity_id != ''
+            and internal_adaptive_lighting_switch_entity_id.split('.')[0] == 'switch'
+            and states(internal_adaptive_lighting_switch_entity_id) in ['on', 'off']
           }}
     then:
       - alias: 'Set the HACS switch to match the active brightness controller'
         choose:
-          - alias: 'Disable HACS brightness while internal dynamic brightness is active'
+          - alias: 'Disable HACS brightness while an internal or forced-brightness action is active'
             conditions:
-              - alias: 'Internal brightness is enabled and the current time is inside its window'
+              - alias: 'Internal brightness or a forced-brightness action is active'
                 condition: template
                 value_template: '{{ var_bol_internal_dynamic_brightness_active }}'
               - alias: 'HACS brightness is currently on'
@@ -496,11 +545,11 @@ actions:
                 target:
                   entity_id: '{{ in_adaptive_lighting_adapt_brightness_switch }}'
 
-          - alias: 'Enable HACS brightness when internal brightness control is disabled'
+          - alias: 'Enable HACS brightness when internal brightness control is disabled and no override is active'
             conditions:
-              - alias: 'Internal brightness control is disabled'
+              - alias: 'Internal brightness control is disabled and no forced-brightness action is active'
                 condition: template
-                value_template: '{{ not (in_enable_internal_dynamic_brightness | bool) }}'
+                value_template: '{{ not (in_enable_internal_dynamic_brightness | bool) and not var_bol_internal_dynamic_brightness_active }}'
               - alias: 'HACS brightness is currently off'
                 condition: template
                 value_template: >-
@@ -638,6 +687,32 @@ actions:
               var_manual: true
 
       #---------------
+      # Case 4 Manual - To turn ON at 100% from a ZHA double click.
+      #---------------
+      - alias: 'Turn ON targets at 100% from the ZHA double-click trigger'
+        conditions:
+          - alias: 'Triggered by ZHA button double click'
+            condition: trigger
+            id:
+              - trigger_button_value_two
+          - alias: 'A ZHA button is configured'
+            condition: template
+            value_template: "{{ in_button_zha_device | default('', true) != '' }}"
+        sequence:
+          - alias: 'Set the requested target action to turn on'
+            variables:
+              var_target_action: 'turn_on'
+
+          - alias: 'Mark this as a manual button action'
+            variables:
+              var_manual: true
+
+          - alias: 'Disable dynamic and low brightness modes for this action'
+            variables:
+              var_bol_enable_internal_dynamic_brightness: false
+              var_bol_low_brightness_mode: false
+
+      #---------------
       # Case 99 Scheduled - To turn OFF the light when it is daytime.
       #---------------
       - alias: 'Scheduled - turn OFF the target - it is already morning!'
@@ -649,6 +724,14 @@ actions:
           - alias: 'Sun-window behavior is enabled'
             condition: template
             value_template: '{{ in_enable_sun_window_behavior | bool }}'
+          - alias: 'Sunrise helper has a valid time'
+            condition: template
+            value_template: >-
+              {{ var_sunrise_helper | default('', true) != ''
+              and states(var_sunrise_helper) not in
+              ['unknown', 'unavailable']
+              and state_attr(var_sunrise_helper, 'has_time')
+              | default(false) | bool }}
 
         sequence:
           - alias: 'Check: at least one target is ON'
@@ -680,6 +763,14 @@ actions:
           - alias: 'Sun-window behavior is enabled'
             condition: template
             value_template: '{{ in_enable_sun_window_behavior | bool }}'
+          - alias: 'Sunset helper has a valid time'
+            condition: template
+            value_template: >-
+              {{ var_sunset_helper | default('', true) != ''
+              and states(var_sunset_helper) not in
+              ['unknown', 'unavailable']
+              and state_attr(var_sunset_helper, 'has_time')
+              | default(false) | bool }}
 
         sequence:
           - alias: 'Someone is home'
@@ -844,9 +935,34 @@ actions:
                 condition: template
                 value_template: '{{ not (in_enable_sun_window_behavior | bool) }}'
               - alias: 'Current time is between sunset and sunrise'
-                condition: time
-                after: !input 'in_time_night'
-                before: !input 'in_time_morning'
+                condition: template
+                value_template: >-
+                  {% set internal_sunrise_hour = state_attr(var_sunrise_helper, 'hour') %}
+                  {% set internal_sunrise_minute = state_attr(var_sunrise_helper, 'minute') %}
+                  {% set internal_sunrise_second = state_attr(var_sunrise_helper, 'second') %}
+                  {% set internal_sunset_hour = state_attr(var_sunset_helper, 'hour') %}
+                  {% set internal_sunset_minute = state_attr(var_sunset_helper, 'minute') %}
+                  {% set internal_sunset_second = state_attr(var_sunset_helper, 'second') %}
+                  {% set internal_sunrise_is_valid =
+                    states(var_sunrise_helper) not in ['unknown', 'unavailable']
+                    and state_attr(var_sunrise_helper, 'has_time') | default(false) | bool
+                    and internal_sunrise_hour is not none
+                    and internal_sunrise_minute is not none
+                    and internal_sunrise_second is not none %}
+                  {% set internal_sunset_is_valid =
+                    states(var_sunset_helper) not in ['unknown', 'unavailable']
+                    and state_attr(var_sunset_helper, 'has_time') | default(false) | bool
+                    and internal_sunset_hour is not none
+                    and internal_sunset_minute is not none
+                    and internal_sunset_second is not none %}
+                  {% if internal_sunrise_is_valid and internal_sunset_is_valid %}
+                    {% set internal_current_time_seconds = now().hour * 3600 + now().minute * 60 + now().second %}
+                    {% set internal_sunrise_time_seconds = internal_sunrise_hour * 3600 + internal_sunrise_minute * 60 + internal_sunrise_second %}
+                    {% set internal_sunset_time_seconds = internal_sunset_hour * 3600 + internal_sunset_minute * 60 + internal_sunset_second %}
+                    {{ internal_current_time_seconds >= internal_sunset_time_seconds or internal_current_time_seconds < internal_sunrise_time_seconds }}
+                  {% else %}
+                    false
+                  {% endif %}
               - alias: 'The request came from the manual button'
                 condition: template
                 value_template: '{{ var_manual }}'
@@ -877,14 +993,14 @@ actions:
               {{ var_dynamic_brightness_script }}
             data:
               in_target_entity_control: !input in_target_entity_control
-              in_enable_internal_dynamic_brightness: !input in_enable_internal_dynamic_brightness
+              in_enable_internal_dynamic_brightness: '{{ var_bol_enable_internal_dynamic_brightness | bool }}'
               in_clock_start_time: !input in_clock_start_brightness
               in_clock_end_time: !input in_clock_end_brightness
               in_min_brightness_pct: !input in_min_brightness_pct
               in_max_brightness_pct: !input in_max_brightness_pct
               in_brightness_curve_gamma: !input in_brightness_curve_gamma
               in_light_transition_seconds: !input in_light_transition_seconds
-              in_low_brightness_mode: false
+              in_low_brightness_mode: '{{ var_bol_low_brightness_mode | bool }}'
 
       #---------------
       # Case OFF
