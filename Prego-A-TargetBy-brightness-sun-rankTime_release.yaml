@@ -3,7 +3,7 @@
 
 # 2026-11-10
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.85
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.86
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -589,6 +589,22 @@ actions:
                 action: switch.turn_on
                 target:
                   entity_id: '{{ in_adaptive_lighting_adapt_brightness_switch }}'
+
+  #---------------
+  # [Check] Botton Check
+  #---------------
+  - alias: 'Skip value triggers matched from the SNZB-01P'
+    if:
+      - alias: 'Triggered by an Aqara value trigger'
+        condition: trigger
+        id:
+          - trigger_button_value_one
+          - trigger_button_value_two
+      - alias: 'The configured device is the SNZB-01P'
+        condition: template
+        value_template: '{{ var_bol_button_device_is_snzb01p }}'
+    then:
+      - stop: 'Ignore the value trigger duplicated by the SNZB-01P'
 
   #---------------
   # [Choose Path] Resolve requested target action
