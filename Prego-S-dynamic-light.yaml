@@ -1,5 +1,5 @@
 blueprint:
-  name: Prego Script - Dynamic Light Control  v5.29
+  name: Prego Script - Dynamic Light Control  v5.31
   description: >-
     Turns on selected switches or lights. Lights receive dynamic brightness
     when enabled and supported; switches are turned on without brightness data.
@@ -40,8 +40,15 @@ fields:
         unit_of_measurement: s
   in_enable_internal_dynamic_brightness:
     name: Enable brightness control
-    description: Whether to apply dynamic brightness during the configured time window.
+    description: Whether dynamic brightness is normally enabled. Low-brightness mode can also apply it outside the configured time window.
     required: true
+    selector:
+      boolean: {}
+  in_low_brightness_mode:
+    name: Low brightness mode
+    description: Apply a stronger darkness factor and bypass the configured time window when enabled.
+    required: false
+    default: false
     selector:
       boolean: {}
   in_clock_start_time:
@@ -119,14 +126,14 @@ sequence:
       var_target_domain: >-
         {{ var_first_target_entity.split('.')[0] if '.' in var_first_target_entity else '' }}
       var_bol_target_domains_mixed: >-
-        {% set targets = [var_target_entities] if var_target_entities is string else (var_target_entities | default([], true)) %}
-        {% set ns = namespace(has_mixed_domains=false) %}
-        {% for entity in targets %}
+        {% set temp_target_entities = [var_target_entities] if var_target_entities is string else (var_target_entities | default([], true)) %}
+        {% set temp_target_domain_check = namespace(temp_has_mixed_domains=false) %}
+        {% for entity in temp_target_entities %}
           {% if entity.split('.')[0] != var_target_domain %}
-            {% set ns.has_mixed_domains = true %}
+            {% set temp_target_domain_check.temp_has_mixed_domains = true %}
           {% endif %}
         {% endfor %}
-        {{ ns.has_mixed_domains }}
+        {{ temp_target_domain_check.temp_has_mixed_domains }}
 
   - alias: Stop when no target entities are provided
     if:
@@ -153,6 +160,8 @@ sequence:
     variables:
       var_light_transition_seconds: '{{ in_light_transition_seconds | int }}'
       var_bol_enable_dynamic_brightness: '{{ in_enable_internal_dynamic_brightness }}'
+      var_bol_low_brightness_mode: '{{ in_low_brightness_mode | default(false) | bool }}'
+      var_darkness_multiplier: '{{ 3 if (in_low_brightness_mode | default(false) | bool) else 1 }}'
       var_clock_start_time: '{{ in_clock_start_time }}'
       var_clock_end_time: '{{ in_clock_end_time }}'
       var_min_brightness_pct: '{{ in_min_brightness_pct | float }}'
@@ -187,9 +196,9 @@ sequence:
     if:
       - condition: template
         value_template: >-
-          {% set minimum = var_min_brightness_pct | float(-1) %}
-          {% set maximum = var_max_brightness_pct | float(-1) %}
-          {{ minimum < 1 or maximum > 100 or minimum > maximum }}
+          {% set internal_minimum_brightness_pct = var_min_brightness_pct | float(-1) %}
+          {% set internal_maximum_brightness_pct = var_max_brightness_pct | float(-1) %}
+          {{ internal_minimum_brightness_pct < 1 or internal_maximum_brightness_pct > 100 or internal_minimum_brightness_pct > internal_maximum_brightness_pct }}
     then:
       - stop: Minimum brightness must be at least 1%, maximum must be at most 100%, and minimum must not exceed maximum.
         error: true
@@ -215,25 +224,31 @@ sequence:
       var_current_time: >-
         {{ now().strftime('%H:%M:%S') }}
 
-  - variables:
+  - alias: Check whether current time is in the brightness window
+    variables:
+      var_bol_inside_brightness_window: >-
+        {{
+          (
+            var_clock_start_time < var_clock_end_time
+            and var_current_time >= var_clock_start_time
+            and var_current_time < var_clock_end_time
+          )
+          or (
+            var_clock_start_time > var_clock_end_time
+            and (
+              var_current_time >= var_clock_start_time
+              or var_current_time < var_clock_end_time
+            )
+          )
+        }}
+
+  - alias: Resolve when to apply dynamic brightness
+    variables:
       var_bol_apply_dynamic_brightness: >-
         {{
           var_bol_is_dimmable
           and var_bol_enable_dynamic_brightness
-          and (
-            (
-              var_clock_start_time < var_clock_end_time
-              and var_current_time >= var_clock_start_time
-              and var_current_time < var_clock_end_time
-            )
-            or (
-              var_clock_start_time > var_clock_end_time
-              and (
-                var_current_time >= var_clock_start_time
-                or var_current_time < var_clock_end_time
-              )
-            )
-          )
+          and (var_bol_low_brightness_mode or var_bol_inside_brightness_window)
         }}
       var_bol_keep_brightness_outside_window: >-
         {{ var_bol_is_dimmable and var_bol_enable_dynamic_brightness }}
@@ -255,29 +270,34 @@ sequence:
           - alias: Capture the solar-noon time
             variables:
               var_solar_noon_time: >-
-                {% set noon_dt = states('sensor.sun_next_noon') | as_datetime | as_local %}
-                {{ noon_dt.strftime('%H:%M:%S') }}
+                {% set temp_solar_noon_datetime = states('sensor.sun_next_noon') | as_datetime | as_local %}
+                {{ temp_solar_noon_datetime.strftime('%H:%M:%S') }}
 
           - alias: Calculate the solar-noon time offset
             variables:
               var_hours_from_solar_noon: >-
-                {% set noon_today = today_at(var_solar_noon_time) %}
-                {% set t = (as_timestamp(now()) - as_timestamp(noon_today)) / 3600 %}
+                {% set temp_solar_noon_today = today_at(var_solar_noon_time) %}
+                {% set temp_hours_from_solar_noon = (as_timestamp(now()) - as_timestamp(temp_solar_noon_today)) / 3600 %}
 
-                {% if t > 12 %}
-                  {% set t = t - 24 %}
+                {% if temp_hours_from_solar_noon > 12 %}
+                  {% set temp_hours_from_solar_noon = temp_hours_from_solar_noon - 24 %}
                 {% endif %}
 
-                {% if t < -12 %}
-                  {% set t = t + 24 %}
+                {% if temp_hours_from_solar_noon < -12 %}
+                  {% set temp_hours_from_solar_noon = temp_hours_from_solar_noon + 24 %}
                 {% endif %}
 
-                {{ t }}
+                {{ temp_hours_from_solar_noon }}
+
+          - alias: Calculate the darkness factor
+            variables:
+              var_darkness_factor: >-
+                {{ (var_hours_from_solar_noon | float(0) | abs) * (var_darkness_multiplier | int(1)) }}
 
           - alias: Calculate raw and normalized brightness
             variables:
               var_raw_brightness_pct: >-
-                {{ 100 - (var_hours_from_solar_noon | float(0) | abs) * (100 / 12) }}
+                {{ 100 - (var_darkness_factor | float(0)) * (100 / 12) }}
 
           - alias: Normalize the raw brightness level
             variables:
@@ -310,6 +330,8 @@ sequence:
               message: >-
                 Prego dynamic light calculation: received min={{ var_min_brightness_pct }}%,
                 max={{ var_max_brightness_pct }}%, gamma={{ var_brightness_curve_gamma }};
+                low-brightness mode={{ var_bol_low_brightness_mode }},
+                darkness multiplier={{ var_darkness_multiplier }}, factor={{ var_darkness_factor | float(0) | round(2) }} h;
                 solar-noon offset={{ var_hours_from_solar_noon | float(0) | round(2) }} h;
                 raw={{ var_raw_brightness_pct | float(0) | round(2) }}%;
                 normalized={{ var_normalized_brightness | float(0) | round(4) }};

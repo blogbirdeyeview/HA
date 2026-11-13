@@ -3,7 +3,7 @@
 
 # 2026-11-10
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.71
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.73
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -58,6 +58,15 @@ blueprint:
     in_away_from_home:
       name: Away from home
       description: Optional indicator that means nobody is currently home (travel).
+      default: ''
+      selector:
+        entity:
+          domain: input_boolean
+
+    in_low_brightness_mode:
+      name: Low brightness mode
+      description: >-
+        Optional input_boolean helper, such as input_boolean.low_brightness_mode. When ON, dynamic brightness also applies outside its configured time window and uses a stronger darkness factor. Leave empty to disable.
       default: ''
       selector:
         entity:
@@ -173,7 +182,7 @@ blueprint:
       input:
         in_enable_internal_dynamic_brightness:
           name: Enable internal brightness control (internal-brightness)
-          description: If enabled, the internal script controls brightness during its configured window and HACS Adaptive Lighting controls it outside that window. If disabled, the script leaves brightness unchanged and the selected HACS switch is enabled.
+          description: If enabled, the internal script controls brightness during its configured window and HACS Adaptive Lighting controls it outside that window. The optional low-brightness mode also uses the internal script outside the window while its helper is ON. If disabled, the script leaves brightness unchanged and the selected HACS switch is enabled.
           default: false
           selector:
             boolean: {}
@@ -301,6 +310,7 @@ variables:
   in_time_night: !input in_time_night
   in_enable_quiet_window_behavior: !input in_enable_quiet_window_behavior
   in_enable_internal_dynamic_brightness: !input in_enable_internal_dynamic_brightness
+  in_low_brightness_mode: !input in_low_brightness_mode
   in_adaptive_lighting_adapt_brightness_switch: !input in_adaptive_lighting_adapt_brightness_switch
   in_clock_start_brightness: !input in_clock_start_brightness
   in_clock_end_brightness: !input in_clock_end_brightness
@@ -312,17 +322,24 @@ variables:
     {{ in_dynamic_brightness_script | default('script.prego_script_dynamic_light_control_v4_18_2', true) }}
   #--- Block-var
   # Intentional duplicate of the script's brightness-window check, used only to
-  # synchronize Adaptive Lighting before target-action routing. Keep the same
-  # inclusive start, exclusive end, and cross-midnight behavior.
+  # synchronize Adaptive Lighting before target-action routing. It also honors
+  # low-brightness mode and keeps the same window boundary semantics.
+  var_bol_low_brightness_mode: >-
+    {% set temp_low_brightness_entity_id = in_low_brightness_mode | default('', true) %}
+    {{ temp_low_brightness_entity_id != '' and is_state(temp_low_brightness_entity_id, 'on') }}
+  #--- Block-var
   var_bol_internal_dynamic_brightness_active: >-
-    {% set current_time = now().strftime('%H:%M:%S') %}
-    {% set start_time = in_clock_start_brightness %}
-    {% set end_time = in_clock_end_brightness %}
+    {% set temp_current_time = now().strftime('%H:%M:%S') %}
+    {% set temp_brightness_window_start_time = in_clock_start_brightness %}
+    {% set temp_brightness_window_end_time = in_clock_end_brightness %}
+    {% set temp_low_brightness_entity_id = in_low_brightness_mode | default('', true) %}
+    {% set temp_low_brightness_mode_enabled = temp_low_brightness_entity_id != '' and is_state(temp_low_brightness_entity_id, 'on') %}
     {{
       in_enable_internal_dynamic_brightness | bool
       and (
-        (start_time < end_time and current_time >= start_time and current_time < end_time)
-        or (start_time > end_time and (current_time >= start_time or current_time < end_time))
+        temp_low_brightness_mode_enabled
+        or (temp_brightness_window_start_time < temp_brightness_window_end_time and temp_current_time >= temp_brightness_window_start_time and temp_current_time < temp_brightness_window_end_time)
+        or (temp_brightness_window_start_time > temp_brightness_window_end_time and (temp_current_time >= temp_brightness_window_start_time or temp_current_time < temp_brightness_window_end_time))
       )
     }}
   #--- Block-var
@@ -366,11 +383,11 @@ variables:
     | count > 0 }}
   #--- Block-var
   var_target_entities_on_names: >-
-    {% set ns = namespace(items=[]) %}
+    {% set temp_target_name_list = namespace(temp_entity_names=[]) %}
     {% for entity in expand(var_target_entities) if entity.state == 'on' %}
-      {% set ns.items = ns.items + [entity.name ~ ' (' ~ entity.entity_id ~ ')'] %}
+      {% set temp_target_name_list.temp_entity_names = temp_target_name_list.temp_entity_names + [entity.name ~ ' (' ~ entity.entity_id ~ ')'] %}
     {% endfor %}
-    {{ ns.items | join(', ') }}
+    {{ temp_target_name_list.temp_entity_names | join(', ') }}
 
 #---------------
 # Triggers
@@ -493,11 +510,11 @@ actions:
       - alias: 'The selected Adaptive Lighting switch exists and is available'
         condition: template
         value_template: >-
-          {% set adaptive_switch = in_adaptive_lighting_adapt_brightness_switch | default('', true) %}
+          {% set internal_adaptive_lighting_switch_entity_id = in_adaptive_lighting_adapt_brightness_switch | default('', true) %}
           {{
-            adaptive_switch != ''
-            and adaptive_switch.split('.')[0] == 'switch'
-            and states(adaptive_switch) in ['on', 'off']
+            internal_adaptive_lighting_switch_entity_id != ''
+            and internal_adaptive_lighting_switch_entity_id.split('.')[0] == 'switch'
+            and states(internal_adaptive_lighting_switch_entity_id) in ['on', 'off']
           }}
     then:
       - alias: 'Set the HACS switch to match the active brightness controller'
@@ -883,29 +900,29 @@ actions:
               - alias: 'Current time is between sunset and sunrise'
                 condition: template
                 value_template: >-
-                  {% set sunrise_hour = state_attr(var_sunrise_helper, 'hour') %}
-                  {% set sunrise_minute = state_attr(var_sunrise_helper, 'minute') %}
-                  {% set sunrise_second = state_attr(var_sunrise_helper, 'second') %}
-                  {% set sunset_hour = state_attr(var_sunset_helper, 'hour') %}
-                  {% set sunset_minute = state_attr(var_sunset_helper, 'minute') %}
-                  {% set sunset_second = state_attr(var_sunset_helper, 'second') %}
-                  {% set sunrise_valid =
+                  {% set internal_sunrise_hour = state_attr(var_sunrise_helper, 'hour') %}
+                  {% set internal_sunrise_minute = state_attr(var_sunrise_helper, 'minute') %}
+                  {% set internal_sunrise_second = state_attr(var_sunrise_helper, 'second') %}
+                  {% set internal_sunset_hour = state_attr(var_sunset_helper, 'hour') %}
+                  {% set internal_sunset_minute = state_attr(var_sunset_helper, 'minute') %}
+                  {% set internal_sunset_second = state_attr(var_sunset_helper, 'second') %}
+                  {% set internal_sunrise_is_valid =
                     states(var_sunrise_helper) not in ['unknown', 'unavailable']
                     and state_attr(var_sunrise_helper, 'has_time') | default(false) | bool
-                    and sunrise_hour is not none
-                    and sunrise_minute is not none
-                    and sunrise_second is not none %}
-                  {% set sunset_valid =
+                    and internal_sunrise_hour is not none
+                    and internal_sunrise_minute is not none
+                    and internal_sunrise_second is not none %}
+                  {% set internal_sunset_is_valid =
                     states(var_sunset_helper) not in ['unknown', 'unavailable']
                     and state_attr(var_sunset_helper, 'has_time') | default(false) | bool
-                    and sunset_hour is not none
-                    and sunset_minute is not none
-                    and sunset_second is not none %}
-                  {% if sunrise_valid and sunset_valid %}
-                    {% set current_seconds = now().hour * 3600 + now().minute * 60 + now().second %}
-                    {% set sunrise_seconds = sunrise_hour * 3600 + sunrise_minute * 60 + sunrise_second %}
-                    {% set sunset_seconds = sunset_hour * 3600 + sunset_minute * 60 + sunset_second %}
-                    {{ current_seconds >= sunset_seconds or current_seconds < sunrise_seconds }}
+                    and internal_sunset_hour is not none
+                    and internal_sunset_minute is not none
+                    and internal_sunset_second is not none %}
+                  {% if internal_sunrise_is_valid and internal_sunset_is_valid %}
+                    {% set internal_current_time_seconds = now().hour * 3600 + now().minute * 60 + now().second %}
+                    {% set internal_sunrise_time_seconds = internal_sunrise_hour * 3600 + internal_sunrise_minute * 60 + internal_sunrise_second %}
+                    {% set internal_sunset_time_seconds = internal_sunset_hour * 3600 + internal_sunset_minute * 60 + internal_sunset_second %}
+                    {{ internal_current_time_seconds >= internal_sunset_time_seconds or internal_current_time_seconds < internal_sunrise_time_seconds }}
                   {% else %}
                     false
                   {% endif %}
@@ -946,6 +963,7 @@ actions:
               in_max_brightness_pct: !input in_max_brightness_pct
               in_brightness_curve_gamma: !input in_brightness_curve_gamma
               in_light_transition_seconds: !input in_light_transition_seconds
+              in_low_brightness_mode: '{{ var_bol_low_brightness_mode | bool }}'
 
       #---------------
       # Case OFF

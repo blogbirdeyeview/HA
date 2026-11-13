@@ -144,6 +144,16 @@ Naming convention:
 - Do not mix these prefixes.
 - Keep the naming consistent throughout the blueprint.
 
+### Internal Jinja Variables
+
+Use descriptive prefixes for local variables assigned with Jinja `{% set %}`:
+
+- Inside the value of a `variables:` definition, use `temp_<description>`.
+- In templates elsewhere, including conditions and actions, use `internal_<description>`.
+- Keep names concise but specific. Avoid generic names such as `helper`, `value`, `x`, `t`, or `ns`.
+- Apply the same prefix to namespace objects and attributes assigned on them.
+- Keep the required prefix on every reassignment, including assignments inside conditional and loop blocks.
+
 Preferred approach:
 
 - Create a clear `variables:` block near the top of the blueprint.
