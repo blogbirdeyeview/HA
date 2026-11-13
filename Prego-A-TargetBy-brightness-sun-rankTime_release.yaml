@@ -3,7 +3,7 @@
 
 # 2026-11-10
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.82
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.84
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -312,6 +312,12 @@ variables:
   in_button_zha_device: !input in_button_zha_device
   var_target_action: 'none'
   var_manual: false
+  var_bol_button_device_is_snzb01p: >-
+    {{
+      in_button_zha_device | default('', true) != ''
+      and device_attr(in_button_zha_device, 'manufacturer') == 'eWeLink'
+      and device_attr(in_button_zha_device, 'model') == 'SNZB-01P'
+    }}
   var_dynamic_brightness_script: >-
     {{ in_dynamic_brightness_script | default('script.prego_script_dynamic_light_control_v4_18_2', true) }}
   #--- Block-var
@@ -663,7 +669,7 @@ actions:
       #---------------
       - alias: 'Toggle targets from the manual ZHA button'
         conditions:
-          - alias: 'Triggered by the configured ZHA button'
+          - alias: 'Triggered by a configured ZHA button event'
             condition: trigger
             id:
               - trigger_button_snzb_toggle
@@ -674,12 +680,12 @@ actions:
         sequence:
           - alias: 'Capture the ZHA button event data for this trace'
             variables:
-              internal_button_event_data: "{{ trigger.event.data if trigger.event is defined else trigger }}"
-              internal_button_event_command: "{{ trigger.event.data.command | default('not_provided', true) if trigger.event is defined else 'device_trigger' }}"
+              internal_button_event_data: '{{ trigger.event.data }}'
+              internal_button_event_command: "{{ trigger.event.data.command | default('not_provided', true) }}"
 
-          - alias: 'Skip non-press SNZB-01P attribute events'
+          - alias: 'Skip the SNZB-01P double-click ON event'
             condition: template
-            value_template: "{{ (internal_button_event_command | lower) not in ['on', 'attribute_updated'] }}"
+            value_template: "{{ internal_button_event_command != 'on' }}"
 
           - alias: 'Choose turn OFF if any target is already ON'
             if:
@@ -712,6 +718,10 @@ actions:
             condition: template
             value_template: "{{ in_button_zha_device | default('', true) != '' }}"
         sequence:
+          - alias: 'NOT snzb01p'
+            condition: template
+            value_template: '{{ not var_bol_button_device_is_snzb01p }}'
+
           - alias: 'Set the requested target action to turn on'
             variables:
               var_target_action: 'turn_on'
@@ -730,7 +740,7 @@ actions:
       #---------------
       - alias: 'Turn ON targets at 100% from the SNZB-01P double-click trigger'
         conditions:
-          - alias: 'Triggered by the SNZB-01P double-click ON command'
+          - alias: 'Triggered by the SNZB-01P double-click device trigger'
             condition: trigger
             id:
               - trigger_button_snzb_double_click
