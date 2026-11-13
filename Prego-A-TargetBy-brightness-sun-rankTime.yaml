@@ -6,7 +6,7 @@
 
 # 2026-11-07
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.65
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time v3.66
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -438,7 +438,7 @@ triggers:
       {{ var_sun_window_behavior_enabled | bool
         and var_sunrise_helper | default('', true) != '' }}
     id: trigger_time_morning
-    at: "{{ var_sunrise_helper }}"
+    at: '{{ var_sunrise_helper }}'
 
   - trigger: time
     alias: Sunset
@@ -446,7 +446,7 @@ triggers:
       {{ var_sun_window_behavior_enabled | bool
         and var_sunset_helper | default('', true) != '' }}
     id: trigger_time_night
-    at: "{{ var_sunset_helper }}"
+    at: '{{ var_sunset_helper }}'
 
   - trigger: time
     alias: Quiet window starts
@@ -923,6 +923,7 @@ actions:
               in_max_brightness_pct: !input in_max_brightness_pct
               in_brightness_curve_gamma: !input in_brightness_curve_gamma
               in_light_transition_seconds: !input in_light_transition_seconds
+              in_low_brightness_mode: false
 
       #---------------
       # Case OFF

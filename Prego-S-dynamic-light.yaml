@@ -1,5 +1,5 @@
 blueprint:
-  name: Prego Script - Dynamic Light Control  v5.31
+  name: Prego Script - Dynamic Light Control  v5.32
   description: >-
     Turns on selected switches or lights. Lights receive dynamic brightness
     when enabled and supported; switches are turned on without brightness data.
@@ -151,7 +151,7 @@ sequence:
   - alias: Stop when target entities mix domains
     if:
       - condition: template
-        value_template: "{{ var_bol_target_domains_mixed }}"
+        value_template: '{{ var_bol_target_domains_mixed }}'
     then:
       - stop: Target entities must all be switches or all be lights.
         error: true
