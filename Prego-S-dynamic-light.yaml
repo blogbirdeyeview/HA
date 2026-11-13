@@ -1,5 +1,5 @@
 blueprint:
-  name: Prego Script - Dynamic Light Control  v5.32
+  name: Prego Script - Dynamic Light Control  v5.33
   description: >-
     Turns on selected switches or lights. Lights receive dynamic brightness
     when enabled and supported; switches are turned on without brightness data.
@@ -372,7 +372,7 @@ sequence:
               entity_id: '{{ var_target_entities }}'
             data:
               transition: '{{ var_light_transition_seconds | int }}'
-              #brightness_pct: 100
+              brightness_pct: 100
 
     #---------------
     # Save case - Turn ON the light.

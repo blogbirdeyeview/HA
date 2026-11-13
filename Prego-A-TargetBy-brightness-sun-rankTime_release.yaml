@@ -3,7 +3,7 @@
 
 # 2026-11-10
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.73
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.74
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -44,6 +44,19 @@ blueprint:
         entity:
           domain: binary_sensor
 
+    input:
+      in_button_zha_device:
+        name: Manual button (ZHA)
+        description: >-
+          Optional ZHA button. A single click toggles the targets: turns them ON if all are off,
+          or OFF if any is on. It ignores darkness, quiet hours, away and stealth restrictions.
+          Leave empty to disable.
+        default: ''
+        selector:
+          device:
+            filter:
+              - integration: zha
+
     in_inactivity_timeout:
       name: No-motion duration
       description: Time without motion before the automation turns the targets OFF.
@@ -58,15 +71,6 @@ blueprint:
     in_away_from_home:
       name: Away from home
       description: Optional indicator that means nobody is currently home (travel).
-      default: ''
-      selector:
-        entity:
-          domain: input_boolean
-
-    in_low_brightness_mode:
-      name: Low brightness mode
-      description: >-
-        Optional input_boolean helper, such as input_boolean.low_brightness_mode. When ON, dynamic brightness also applies outside its configured time window and uses a stronger darkness factor. Leave empty to disable.
       default: ''
       selector:
         entity:
@@ -88,25 +92,6 @@ blueprint:
       default: false
       selector:
         boolean:
-
-    collapsed_manual_button:
-      name: Manual button
-      icon: mdi:gesture-tap-button
-      description: >-
-        Configure an optional ZHA button to toggle the targets with one click.
-      collapsed: true
-      input:
-        in_button_zha_device:
-          name: Manual button (ZHA)
-          description: >-
-            Optional ZHA button. A single click toggles the targets: turns them ON if all are off,
-            or OFF if any is on. It ignores darkness, quiet hours, away and stealth restrictions.
-            Leave empty to disable.
-          default: ''
-          selector:
-            device:
-              filter:
-                - integration: zha
 
     collapsed_quiet_window_schedule:
       name: Automatic turn-on restrictions - darkness and quiet hours
@@ -211,6 +196,15 @@ blueprint:
             entity:
               filter:
                 - domain: script
+
+        in_low_brightness_mode:
+          name: Low brightness mode
+          description: >-
+            Optional input_boolean helper, such as input_boolean.low_brightness_mode. When ON, dynamic brightness also applies outside its configured time window and uses a stronger darkness factor. Leave empty to disable.
+          default: ''
+          selector:
+            entity:
+              domain: input_boolean
 
         in_clock_start_brightness:
           name: Internal dynamic brightness start time
