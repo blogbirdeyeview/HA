@@ -3,7 +3,7 @@
 
 # 2026-11-10
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.74
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.76
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -16,7 +16,7 @@ blueprint:
     - The internal brightness window selects the brightness controller only. It is NOT an additional turn-ON permission window.
     - Optional turns targets OFF after Home Assistant restarts when no motion is detected.
     - Optional automatic brightness control for lights works with Prego dynamic brightness and HACS Adaptive Lighting.
-    - Optional ZHA button toggles the targets with a single click, bypassing automatic turn-on restrictions.
+    - Optional ZHA button toggles the targets with a single click or turns them ON at 100% with a double click.
 
     * Away-from-home and stealth options can prevent automatic turn-ON.
   domain: automation
@@ -49,7 +49,8 @@ blueprint:
         name: Manual button (ZHA)
         description: >-
           Optional ZHA button. A single click toggles the targets: turns them ON if all are off,
-          or OFF if any is on. It ignores darkness, quiet hours, away and stealth restrictions.
+          or OFF if any is on. A double click turns the targets ON at 100%. Both actions ignore
+          darkness, quiet hours, away and stealth restrictions.
           Leave empty to disable.
         default: ''
         selector:
@@ -167,7 +168,7 @@ blueprint:
       input:
         in_enable_internal_dynamic_brightness:
           name: Enable internal brightness control (internal-brightness)
-          description: If enabled, the internal script controls brightness during its configured window and HACS Adaptive Lighting controls it outside that window. The optional low-brightness mode also uses the internal script outside the window while its helper is ON. If disabled, the script leaves brightness unchanged and the selected HACS switch is enabled.
+          description: If enabled, the internal script controls brightness during its configured window and HACS Adaptive Lighting controls it outside that window. The optional low-brightness mode also uses the internal script outside the window while its helper is ON. If disabled, dimmable lights use 100% brightness and the selected HACS switch remains available for regular runs.
           default: false
           selector:
             boolean: {}
@@ -321,6 +322,7 @@ variables:
   var_bol_low_brightness_mode: >-
     {% set temp_low_brightness_entity_id = in_low_brightness_mode | default('', true) %}
     {{ temp_low_brightness_entity_id != '' and is_state(temp_low_brightness_entity_id, 'on') }}
+  var_bol_enable_internal_dynamic_brightness: !input in_enable_internal_dynamic_brightness
   #--- Block-var
   var_bol_internal_dynamic_brightness_active: >-
     {% set temp_current_time = now().strftime('%H:%M:%S') %}
@@ -329,11 +331,14 @@ variables:
     {% set temp_low_brightness_entity_id = in_low_brightness_mode | default('', true) %}
     {% set temp_low_brightness_mode_enabled = temp_low_brightness_entity_id != '' and is_state(temp_low_brightness_entity_id, 'on') %}
     {{
-      in_enable_internal_dynamic_brightness | bool
-      and (
-        temp_low_brightness_mode_enabled
-        or (temp_brightness_window_start_time < temp_brightness_window_end_time and temp_current_time >= temp_brightness_window_start_time and temp_current_time < temp_brightness_window_end_time)
-        or (temp_brightness_window_start_time > temp_brightness_window_end_time and (temp_current_time >= temp_brightness_window_start_time or temp_current_time < temp_brightness_window_end_time))
+      (trigger is defined and (trigger.id | default('')) == 'trigger_button_value_two')
+      or (
+        in_enable_internal_dynamic_brightness | bool
+        and (
+          temp_low_brightness_mode_enabled
+          or (temp_brightness_window_start_time < temp_brightness_window_end_time and temp_current_time >= temp_brightness_window_start_time and temp_current_time < temp_brightness_window_end_time)
+          or (temp_brightness_window_start_time > temp_brightness_window_end_time and (temp_current_time >= temp_brightness_window_start_time or temp_current_time < temp_brightness_window_end_time))
+        )
       )
     }}
   #--- Block-var
@@ -414,6 +419,16 @@ triggers:
       args:
         value: 1
     id: trigger_button_value_one
+
+  - trigger: event
+    alias: ZHA button double click (value argument)
+    enabled: "{{ var_button_zha_device != '' }}"
+    event_type: zha_event
+    event_data:
+      device_id: !input in_button_zha_device
+      args:
+        value: 2
+    id: trigger_button_value_two
   #--- Button End
 
   - trigger: state
@@ -513,9 +528,9 @@ actions:
     then:
       - alias: 'Set the HACS switch to match the active brightness controller'
         choose:
-          - alias: 'Disable HACS brightness while internal dynamic brightness is active'
+          - alias: 'Disable HACS brightness while an internal or forced-brightness action is active'
             conditions:
-              - alias: 'Internal brightness is enabled and the current time is inside its window'
+              - alias: 'Internal brightness or a forced-brightness action is active'
                 condition: template
                 value_template: '{{ var_bol_internal_dynamic_brightness_active }}'
               - alias: 'HACS brightness is currently on'
@@ -528,11 +543,11 @@ actions:
                 target:
                   entity_id: '{{ in_adaptive_lighting_adapt_brightness_switch }}'
 
-          - alias: 'Enable HACS brightness when internal brightness control is disabled'
+          - alias: 'Enable HACS brightness when internal brightness control is disabled and no override is active'
             conditions:
-              - alias: 'Internal brightness control is disabled'
+              - alias: 'Internal brightness control is disabled and no forced-brightness action is active'
                 condition: template
-                value_template: '{{ not (in_enable_internal_dynamic_brightness | bool) }}'
+                value_template: '{{ not (in_enable_internal_dynamic_brightness | bool) and not var_bol_internal_dynamic_brightness_active }}'
               - alias: 'HACS brightness is currently off'
                 condition: template
                 value_template: >-
@@ -668,6 +683,32 @@ actions:
           - alias: 'Mark this as a manual button action'
             variables:
               var_manual: true
+
+      #---------------
+      # Case 4 Manual - To turn ON at 100% from a ZHA double click.
+      #---------------
+      - alias: 'Turn ON targets at 100% from the ZHA double-click trigger'
+        conditions:
+          - alias: 'Triggered by ZHA button double click'
+            condition: trigger
+            id:
+              - trigger_button_value_two
+          - alias: 'A ZHA button is configured'
+            condition: template
+            value_template: "{{ in_button_zha_device | default('', true) != '' }}"
+        sequence:
+          - alias: 'Set the requested target action to turn on'
+            variables:
+              var_target_action: 'turn_on'
+
+          - alias: 'Mark this as a manual button action'
+            variables:
+              var_manual: true
+
+          - alias: 'Disable dynamic and low brightness modes for this action'
+            variables:
+              var_bol_enable_internal_dynamic_brightness: false
+              var_bol_low_brightness_mode: false
 
       #---------------
       # Case 99 Scheduled - To turn OFF the light when it is daytime.
@@ -950,7 +991,7 @@ actions:
               {{ var_dynamic_brightness_script }}
             data:
               in_target_entity_control: !input in_target_entity_control
-              in_enable_internal_dynamic_brightness: !input in_enable_internal_dynamic_brightness
+              in_enable_internal_dynamic_brightness: '{{ var_bol_enable_internal_dynamic_brightness | bool }}'
               in_clock_start_time: !input in_clock_start_brightness
               in_clock_end_time: !input in_clock_end_brightness
               in_min_brightness_pct: !input in_min_brightness_pct

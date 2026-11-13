@@ -1,9 +1,10 @@
 blueprint:
-  name: Prego Script - Dynamic Light Control  v5.33
+  name: Prego Script - Dynamic Light Control  v5.35
   description: >-
-    Turns on selected switches or lights. Lights receive dynamic brightness
-    when enabled and supported; switches are turned on without brightness data.
-    All parameters are supplied by the calling automation.
+    Turns on selected switches or lights. Dimmable lights receive dynamic
+    brightness when it applies and 100% brightness otherwise. Switches are
+    turned on without brightness data. All parameters are supplied by the
+    calling automation.
   domain: script
   homeassistant:
     min_version: 2026.6.0
@@ -40,13 +41,13 @@ fields:
         unit_of_measurement: s
   in_enable_internal_dynamic_brightness:
     name: Enable brightness control
-    description: Whether dynamic brightness is normally enabled. Low-brightness mode can also apply it outside the configured time window.
+    description: When enabled, dynamic brightness applies inside the configured time window. Dimmable lights use 100% outside the window or when this option is disabled. Low-brightness mode can extend dynamic control outside the window.
     required: true
     selector:
       boolean: {}
   in_low_brightness_mode:
     name: Low brightness mode
-    description: Apply a stronger darkness factor and bypass the configured time window when enabled.
+    description: When enabled with brightness control, apply a stronger darkness factor and bypass the configured time window.
     required: false
     default: false
     selector:
@@ -250,8 +251,8 @@ sequence:
           and var_bol_enable_dynamic_brightness
           and (var_bol_low_brightness_mode or var_bol_inside_brightness_window)
         }}
-      var_bol_keep_brightness_outside_window: >-
-        {{ var_bol_is_dimmable and var_bol_enable_dynamic_brightness }}
+      var_bol_apply_full_brightness: >-
+        {{ var_bol_is_dimmable and not var_bol_apply_dynamic_brightness }}
 
   #---------------
   # Case Choose - With light brightness
@@ -349,25 +350,25 @@ sequence:
       #---------------
       # Case 2 - Turn ON the light.
       #---------------
-      - alias: Keep brightness unchanged outside the window
+      - alias: Turn on at full brightness when dynamic brightness is not active
         conditions:
           - condition: template
-            value_template: '{{ var_bol_keep_brightness_outside_window }}'
+            value_template: '{{ var_bol_apply_full_brightness }}'
         sequence:
-          - alias: Log unchanged brightness outside the window
+          - alias: Log the full-brightness path
             action: system_log.write
             data:
               level: debug
               message: >-
-                Prego dynamic light calculation: selected full-brightness path outside the configured window;
+                Prego dynamic light calculation: selected full-brightness path because dynamic brightness is disabled or outside its configured window;
                 brightness enabled={{ var_bol_enable_dynamic_brightness }}, dimmable={{ var_bol_is_dimmable }};
                 current={{ var_current_time }}, window={{ var_clock_start_time }}-{{ var_clock_end_time }};
                 received min={{ var_min_brightness_pct }}%, max={{ var_max_brightness_pct }}%,
                 gamma={{ var_brightness_curve_gamma }}; 
-                calculated=unchanged on purpose.
+                calculated=100%.
 
           - action: light.turn_on
-            alias: Turn on without changing brightness outside the window
+            alias: Turn on at 100% brightness
             target:
               entity_id: '{{ var_target_entities }}'
             data:
