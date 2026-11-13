@@ -3,7 +3,7 @@
 
 # 2026-11-10
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.77
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.78
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -330,7 +330,7 @@ variables:
     {% set temp_low_brightness_entity_id = in_low_brightness_mode | default('', true) %}
     {% set temp_low_brightness_mode_enabled = temp_low_brightness_entity_id != '' and is_state(temp_low_brightness_entity_id, 'on') %}
     {{
-      (trigger is defined and (trigger.id | default('')) == 'trigger_button_value_two')
+      (trigger is defined and (trigger.id | default('')) in ['trigger_button_value_two', 'trigger_button_snzb_double_click'])
       or (
         in_enable_internal_dynamic_brightness | bool
         and (
@@ -410,21 +410,32 @@ triggers:
     id: trigger_button_toggle
 
   - trigger: event
-    alias: ZHA button single click (value argument)
+    alias: ZHA button double click (SNZB-01P ON command)
     enabled: "{{ var_button_zha_device != '' }}"
     event_type: zha_event
     event_data:
       device_id: !input in_button_zha_device
+      command: 'on'
+    id: trigger_button_snzb_double_click
+
+  - trigger: event
+    alias: ZHA button single click (Aqara short-press command)
+    enabled: "{{ var_button_zha_device != '' }}"
+    event_type: zha_event
+    event_data:
+      device_id: !input in_button_zha_device
+      command: remote_button_short_press
       args:
         value: 1
     id: trigger_button_value_one
 
   - trigger: event
-    alias: ZHA button double click (value argument)
+    alias: ZHA button double click (Aqara double-press command)
     enabled: "{{ var_button_zha_device != '' }}"
     event_type: zha_event
     event_data:
       device_id: !input in_button_zha_device
+      command: remote_button_double_press
       args:
         value: 2
     id: trigger_button_value_two
@@ -691,6 +702,7 @@ actions:
           - alias: 'Triggered by ZHA button double click'
             condition: trigger
             id:
+              - trigger_button_snzb_double_click
               - trigger_button_value_two
           - alias: 'A ZHA button is configured'
             condition: template
