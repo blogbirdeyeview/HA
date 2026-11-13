@@ -3,7 +3,7 @@
 
 # 2026-11-10
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.70
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.71
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -119,7 +119,7 @@ blueprint:
           name: Sunrise helper - darkness ends (optional)
           description: >-
             Select the input_datetime helper defining the end of darkness. Its time must represent sunrise and be kept up to date externally; selecting it does not calculate sunrise automatically.
-            Leave empty when it is disabled.
+            Leave empty to use input_datetime.prego_sunrise.
           default: ''
           selector:
             entity:
@@ -129,7 +129,7 @@ blueprint:
           name: Sunset helper - darkness starts (optional)
           description: >-
             Select the input_datetime helper defining the start of darkness. Its time must represent sunset and be kept up to date externally; selecting it does not calculate sunset automatically.
-            Leave empty when it is disabled.
+            Leave empty to use input_datetime.prego_sunset.
           default: ''
           selector:
             entity:
@@ -426,18 +426,18 @@ triggers:
   - trigger: time
     alias: Sunrise
     enabled: >-
-      {{ var_sun_window_behavior_enabled | bool
-        and var_sunrise_helper | default('', true) != '' }}
+      {{ var_sun_window_behavior_enabled | bool }}
     id: trigger_time_morning
-    at: "{{ var_sunrise_helper }}"
+    at: >-
+      {{ var_sunrise_helper | default('input_datetime.prego_sunrise', true) }}
 
   - trigger: time
     alias: Sunset
     enabled: >-
-      {{ var_sun_window_behavior_enabled | bool
-        and var_sunset_helper | default('', true) != '' }}
+      {{ var_sun_window_behavior_enabled | bool }}
     id: trigger_time_night
-    at: "{{ var_sunset_helper }}"
+    at: >-
+      {{ var_sunset_helper | default('input_datetime.prego_sunset', true) }}
 
   - trigger: time
     alias: Quiet window starts
@@ -478,6 +478,13 @@ triggers:
 #---------------
 
 actions:
+  - alias: 'Resolve sunrise and sunset helper entities'
+    variables:
+      var_sunrise_helper: >-
+        {{ in_time_morning | default('input_datetime.prego_sunrise', true) }}
+      var_sunset_helper: >-
+        {{ in_time_night | default('input_datetime.prego_sunset', true) }}
+
   #---------------
   # [Check] Synchronize brightness control
   #---------------
@@ -666,10 +673,10 @@ actions:
           - alias: 'Sunrise helper has a valid time'
             condition: template
             value_template: >-
-              {{ in_time_morning | default('', true) != ''
-              and states(in_time_morning) not in
+              {{ var_sunrise_helper | default('', true) != ''
+              and states(var_sunrise_helper) not in
               ['unknown', 'unavailable']
-              and state_attr(in_time_morning, 'has_time')
+              and state_attr(var_sunrise_helper, 'has_time')
               | default(false) | bool }}
 
         sequence:
@@ -705,10 +712,10 @@ actions:
           - alias: 'Sunset helper has a valid time'
             condition: template
             value_template: >-
-              {{ in_time_night | default('', true) != ''
-              and states(in_time_night) not in
+              {{ var_sunset_helper | default('', true) != ''
+              and states(var_sunset_helper) not in
               ['unknown', 'unavailable']
-              and state_attr(in_time_night, 'has_time')
+              and state_attr(var_sunset_helper, 'has_time')
               | default(false) | bool }}
 
         sequence:
@@ -874,9 +881,34 @@ actions:
                 condition: template
                 value_template: '{{ not (in_enable_sun_window_behavior | bool) }}'
               - alias: 'Current time is between sunset and sunrise'
-                condition: time
-                after: !input 'in_time_night'
-                before: !input 'in_time_morning'
+                condition: template
+                value_template: >-
+                  {% set sunrise_hour = state_attr(var_sunrise_helper, 'hour') %}
+                  {% set sunrise_minute = state_attr(var_sunrise_helper, 'minute') %}
+                  {% set sunrise_second = state_attr(var_sunrise_helper, 'second') %}
+                  {% set sunset_hour = state_attr(var_sunset_helper, 'hour') %}
+                  {% set sunset_minute = state_attr(var_sunset_helper, 'minute') %}
+                  {% set sunset_second = state_attr(var_sunset_helper, 'second') %}
+                  {% set sunrise_valid =
+                    states(var_sunrise_helper) not in ['unknown', 'unavailable']
+                    and state_attr(var_sunrise_helper, 'has_time') | default(false) | bool
+                    and sunrise_hour is not none
+                    and sunrise_minute is not none
+                    and sunrise_second is not none %}
+                  {% set sunset_valid =
+                    states(var_sunset_helper) not in ['unknown', 'unavailable']
+                    and state_attr(var_sunset_helper, 'has_time') | default(false) | bool
+                    and sunset_hour is not none
+                    and sunset_minute is not none
+                    and sunset_second is not none %}
+                  {% if sunrise_valid and sunset_valid %}
+                    {% set current_seconds = now().hour * 3600 + now().minute * 60 + now().second %}
+                    {% set sunrise_seconds = sunrise_hour * 3600 + sunrise_minute * 60 + sunrise_second %}
+                    {% set sunset_seconds = sunset_hour * 3600 + sunset_minute * 60 + sunset_second %}
+                    {{ current_seconds >= sunset_seconds or current_seconds < sunrise_seconds }}
+                  {% else %}
+                    false
+                  {% endif %}
               - alias: 'The request came from the manual button'
                 condition: template
                 value_template: '{{ var_manual }}'
