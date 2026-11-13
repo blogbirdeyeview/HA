@@ -717,9 +717,9 @@ actions:
       #---------------
       # Case 4 Manual - To turn ON at 100% from a ZHA double click.
       #---------------
-      - alias: 'Turn ON targets at 100% from the Aqara double-click trigger'
+      - alias: 'Turn ON targets at 100% from the ZHA double-click trigger'
         conditions:
-          - alias: 'Triggered by the Aqara double-click device trigger'
+          - alias: 'Triggered by the ZHA double-click device trigger'
             condition: trigger
             id:
               - trigger_button_snzb_double_click
