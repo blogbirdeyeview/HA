@@ -1,12 +1,14 @@
-# HA-blueprints
+# Prego · Blueprints para Home Assistant
 
-Para trabajar con IA, empieza por [AGENTS.md](AGENTS.md). El mapa de blueprints y sus dependencias está en la [guía del repositorio](docs/repository-guide.md).
+Automatizaciones de movimiento, horarios solares y despertador, y un script de iluminación que calcula el brillo. La [guía del repositorio](docs/repository-guide.md) identifica los blueprints activos, sus variantes y qué automatizaciones llaman al script.
 
-- yamllint: comprobar sintaxis y buenas prácticas.
-- PyYAML: parsear YAML desde scripts Python.
-- ruamel.yaml: modificar YAML conservando comentarios y formato.
+## Trabajar con Codex
 
-# Just developer (No IA)
+Abre Codex en la raíz del repositorio. [AGENTS.md](AGENTS.md) recoge las reglas de compatibilidad y versionado y enlaza las dos skills locales para mantener blueprints y revisar inputs compartidos.
+
+## Entorno de desarrollo
+
+Las [comprobaciones locales](docs/repository-guide.md#local-verification) usan PyYAML para leer las etiquetas de Home Assistant. También puedes usar yamllint para revisar el estilo y ruamel.yaml para editar YAML conservando comentarios. Si necesitas preparar estas herramientas en tu entorno Python, ejecuta en PowerShell:
 
 ```powershell
 python -m pip install --upgrade pip
@@ -21,10 +23,3 @@ python -m yamllint --version
 python -c "import yaml; import ruamel.yaml; print('PyYAML:', yaml.__version__); print('LibYAML:', yaml.__with_libyaml__); print(yaml.safe_load('enabled: true')); print('ruamel.yaml:', ruamel.yaml.__version__)"
 python -m pip check
 ```
-
-yamllint 1.38.0
-PyYAML: 6.0.3
-LibYAML: False
-{'enabled': True}
-ruamel.yaml: 0.19.1
-No broken requirements found.

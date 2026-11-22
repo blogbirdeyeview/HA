@@ -26,6 +26,17 @@ The automation calls the script instance selected in `in_dynamic_brightness_scri
 
 See the script reference for required fields, brightness paths, the solar-noon formula, and debug logs. [Prego-S-dynamic-light.md](Prego-S-dynamic-light.md)
 
+## Local verification
+
+From the repository root, parse each edited YAML with PyYAML. Replace the example filename with the file you edited. `yaml.compose` reads the YAML structure and preserves Home Assistant tags such as `!input`.
+
+```powershell
+python -c "from pathlib import Path; import sys, yaml; yaml.compose(Path(sys.argv[1]).read_text(encoding='utf-8'))" Prego-S-dynamic-light.yaml
+git diff --check
+```
+
+If changes are staged, also run `git diff --cached --check`. For input or script field changes, check references against their declarations and compare the automation payload with the receiving script fields. YAML parsing alone cannot resolve those contracts. Import, save, and trace checks require a Home Assistant instance.
+
 ## References
 
 - [Home Assistant blueprint schema](https://www.home-assistant.io/docs/blueprint/schema/) · [Selectors](https://www.home-assistant.io/docs/blueprint/selectors/) · [Creating an automation blueprint](https://www.home-assistant.io/docs/blueprint/tutorial/) · [Using automation blueprints](https://www.home-assistant.io/docs/automation/using_blueprints/)
