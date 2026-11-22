@@ -1,8 +1,6 @@
 # HA-blueprints
 
-IA read:
-SKILL.md
-x-IA-info.md
+Para trabajar con IA, empieza por [AGENTS.md](AGENTS.md). El mapa de blueprints y sus dependencias está en la [guía del repositorio](docs/repository-guide.md).
 
 - yamllint: comprobar sintaxis y buenas prácticas.
 - PyYAML: parsear YAML desde scripts Python.
