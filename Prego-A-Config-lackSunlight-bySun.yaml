@@ -1,6 +1,6 @@
 # 2026-06-28
 blueprint:
-  name: Prego - Config Lack of sunlight - By sun prego v0.16
+  name: Prego - Config Lack of sunlight - By sun prego v0.20
   description: >
     Config - defines the boolean for the lack of light, guided by the sunrise and sunset settings -- lack of sunlight.
     The automation also reacts when the configured sunrise or sunset helper values change.
@@ -19,7 +19,7 @@ blueprint:
     #*** Filters
     in_away_from_home:
       name: Away from home
-      description: Optional indicator that means nobody is currently home (travel).
+      description: Optional helper that indicates when nobody is home.
       default: ''
       selector:
         entity:
@@ -27,7 +27,7 @@ blueprint:
 
     in_stealth_mode:
       name: Stealth mode
-      description: Optional indicator(s) used to block automatic turn-on, for example when people are sleeping or you want to avoid visible activity.
+      description: Optional helpers that block automatic activation while any of them is on.
       default: []
       selector:
         entity:
@@ -36,15 +36,15 @@ blueprint:
 
     #*** Custum Time Prego
     in_time_morning:
-      name: Sunrise Helper *
-      description: Choose the time helper corresponding to sunrise.
+      name: Sunrise time helper
+      description: Time-only helper that marks when darkness ends.
       selector:
         entity:
           domain: input_datetime
 
     in_time_night:
-      name: Sunset Helper *
-      description: Choose the time helper corresponding to sunset.
+      name: Sunset time helper
+      description: Time-only helper that marks when darkness starts.
       selector:
         entity:
           domain: input_datetime
@@ -62,21 +62,21 @@ blueprint:
 #---------------
 
 variables:
-  var_away_from_home: !input in_away_from_home
-  var_stealth_mode: !input in_stealth_mode
+  in_ji_away_from_home: !input in_away_from_home
+  in_ji_stealth_mode: !input in_stealth_mode
   var_bol_away_from_home: >
-    {% if not var_away_from_home %}
+    {% if not in_ji_away_from_home %}
       {{ false }}
     {% else %}
-      {{ is_state(var_away_from_home, 'on') | bool }}
+      {{ is_state(in_ji_away_from_home, 'on') | bool }}
     {% endif %}
   #--- Block-var
   var_bol_stealth_mode: >
-    {% if not var_stealth_mode or (var_stealth_mode | length == 0) %}
+    {% if not in_ji_stealth_mode or (in_ji_stealth_mode | length == 0) %}
       {{ false }}
     {% else %}
     {{
-      (expand(var_stealth_mode)
+      (expand(in_ji_stealth_mode)
       | selectattr('state', 'eq', 'on')
       | list
       | count > 0)
@@ -91,22 +91,27 @@ variables:
 trigger:
   # Recalculate on Home Assistant startup
   - platform: homeassistant
+    alias: Home Assistant started
     event: start
-    id: trigger_homeassistant_start
+    id: trigger_ha_start
 
   - platform: time
+    alias: Sunrise
     at: !input in_time_morning
     id: trigger_time_morning
 
   - platform: time
+    alias: Sunset
     at: !input in_time_night
     id: trigger_time_night
 
   - platform: state
+    alias: Sunrise helper changed
     entity_id: !input in_time_morning
     id: trigger_helper_morning_changed
 
   - platform: state
+    alias: Sunset helper changed
     entity_id: !input in_time_night
     id: trigger_helper_night_changed
 
@@ -124,7 +129,8 @@ action:
   # If current time is inside the night window and there are no blocking flags,
   # turn ON the lack of sunlight indicator. Otherwise turn it OFF.
   - if:
-      - condition: time
+      - alias: 'Current time is between sunset and sunrise'
+        condition: time
         after: !input in_time_night
         before: !input in_time_morning
       - alias: 'Someone is home'

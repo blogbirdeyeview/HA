@@ -26,6 +26,10 @@ The automation calls the script instance selected in `in_dynamic_brightness_scri
 
 See the script reference for required fields, brightness paths, the solar-noon formula, and debug logs. [Prego-S-dynamic-light.md](Prego-S-dynamic-light.md)
 
+## Variable scopes
+
+Direct `!input` bindings for Jinja include `_ji_` in their names. The keep-alive trigger reads `trigger_var_ji_motion_sensor_keep_alive`, and the execution template reads `in_ji_motion_sensor_keep_alive`. Both bindings refer to `!input in_motion_sensor_keep_alive`. The derived boolean `var_bol_motion_sensor_keep_alive` holds the sensor's motion state. [Repository variable policy](../AGENTS.md#blueprint-variables) · [Variable design workflow](../.agents/skills/home-assistant-blueprint-generation/SKILL.md#variables-strategy)
+
 ## Local verification
 
 From the repository root, parse each edited YAML with PyYAML. Replace the example filename with the file you edited. `yaml.compose` reads the YAML structure and preserves Home Assistant tags such as `!input`.

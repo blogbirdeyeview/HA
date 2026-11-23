@@ -1,7 +1,7 @@
 # 2026-06-28
 # USO - Miguel
 blueprint:
-  name: Prego - Config rank of sunlight - By Sun - Light inside v1.57
+  name: Prego - Config rank of sunlight - By Sun - Light inside v1.61
   description: >
     # 🔆 Config rank of sunlight
 
@@ -25,15 +25,15 @@ blueprint:
   input:
     #*** Custum Time Prego
     in_time_morning:
-      name: Sunrise time helper (time only) *
-      description: Choose the time-only input_datetime helper that defines when the darkness window ends.
+      name: Sunrise time helper
+      description: Time-only helper that marks when darkness ends. This automation updates its time.
       selector:
         entity:
           domain: input_datetime
 
     in_time_night:
-      name: Sunset time helper (time only) *
-      description: Choose the time-only input_datetime helper that defines when the darkness window starts.
+      name: Sunset time helper
+      description: Time-only helper that marks when darkness starts. This automation updates its time.
       selector:
         entity:
           domain: input_datetime
@@ -97,24 +97,22 @@ blueprint:
 #---------------
 
 variables:
-  #--- Critical helper entities and solar event timestamps
-  var_sensor_time_morning: !input in_time_morning
-  var_sensor_time_night: !input in_time_night
-  var_sunrise_time: "{{ state_attr('sun.sun', 'next_rising') }}"
-  var_sunset_time: "{{ state_attr('sun.sun', 'next_setting') }}"
+  #--- Solar event timestamps
+  var_next_sunrise: "{{ state_attr('sun.sun', 'next_rising') }}"
+  var_next_sunset: "{{ state_attr('sun.sun', 'next_setting') }}"
 
   #--- Sensor entities and current readings
-  var_sensor_ldr: !input in_ldr_sensor
-  var_sensor_max_sun_elevation_yesterday: !input in_max_sun_elevation_yesterday
-  var_ldr: '{{ states(var_sensor_ldr) | float(0) }}'
-  var_max_sun_elevation_yesterday: '{{ states(var_sensor_max_sun_elevation_yesterday) | float(0) }}'
+  in_ji_ldr_sensor: !input in_ldr_sensor
+  in_ji_max_sun_elevation_yesterday: !input in_max_sun_elevation_yesterday
+  var_ldr: '{{ states(in_ji_ldr_sensor) | float(0) }}'
+  var_max_sun_elevation_yesterday: '{{ states(in_ji_max_sun_elevation_yesterday) | float(0) }}'
   var_sun_elevation: "{{ state_attr('sun.sun', 'elevation') | float(0) }}"
 
   #--- User-defined schedule adjustments
-  var_extra_ldr_time: !input in_extra_ldr_time
-  var_extra_sun_elevation_time: !input in_extra_sun_elevation_time
-  var_base_offset_morning_minutes: !input in_base_offset_morning_minutes
-  var_base_offset_afternoon_minutes: !input in_base_offset_afternoon_minutes
+  in_ji_extra_ldr_time: !input in_extra_ldr_time
+  in_ji_extra_sun_elevation_time: !input in_extra_sun_elevation_time
+  in_ji_base_offset_morning_minutes: !input in_base_offset_morning_minutes
+  in_ji_base_offset_afternoon_minutes: !input in_base_offset_afternoon_minutes
 
 #---------------
 # Triggers
@@ -141,7 +139,7 @@ trigger:
     offset: '-00:30:00'
 
   - platform: time
-    alias: Recalculate at the sunrise helper time
+    alias: Sunrise
     at: !input in_time_morning
 
   - platform: time
@@ -164,7 +162,7 @@ trigger:
     offset: '-00:30:00'
 
   - platform: time
-    alias: Recalculate at the sunset helper time
+    alias: Sunset
     at: !input in_time_night
 
   - platform: numeric_state
@@ -221,71 +219,71 @@ trigger:
 actions:
   - alias: Calculate base timestamps for the sunrise and sunset helpers
     variables:
-      morning_base_ts: >-
-        {{ as_timestamp(var_sunrise_time) + (var_base_offset_morning_minutes | float(0) * 60) }}
-      night_base_ts: >-
-        {{ as_timestamp(var_sunset_time) - (var_base_offset_afternoon_minutes | float(0) * 60) }}
+      var_base_sunrise_timestamp: >-
+        {{ as_timestamp(var_next_sunrise) + (in_ji_base_offset_morning_minutes | float(0) * 60) }}
+      var_base_sunset_timestamp: >-
+        {{ as_timestamp(var_next_sunset) - (in_ji_base_offset_afternoon_minutes | float(0) * 60) }}
 
   - alias: Calculate the shared LDR and sun-elevation adjustment
     variables:
-      ldr_offset_minutes: >-
-        {{ 1 + (var_extra_ldr_time | float(0) * ((100 - (var_ldr | float(0))) / 100)) }}
-      sun_reference: >-
+      var_ldr_offset_minutes: >-
+        {{ 1 + (in_ji_extra_ldr_time | float(0) * ((100 - (var_ldr | float(0))) / 100)) }}
+      var_sun_elevation_reference: >-
         {{ [var_max_sun_elevation_yesterday | float(0), 1] | max }}
-      sun_ratio: >-
-        {{ [0, [1, (var_sun_elevation | float(0)) / (sun_reference | float(1))] | min] | max }}
-      sun_elevation_factor: >-
-        {{ 1 - (sun_ratio | float(0)) }}
-      sun_elevation_offset_minutes: >-
-        {{ (var_extra_sun_elevation_time | float(0)) * (sun_elevation_factor | float(0)) }}
-      total_adjustment_seconds: >-
-        {{ ((ldr_offset_minutes | float(0)) + (sun_elevation_offset_minutes | float(0))) * 60 }}
+      var_sun_elevation_ratio: >-
+        {{ [0, [1, (var_sun_elevation | float(0)) / (var_sun_elevation_reference | float(1))] | min] | max }}
+      var_sun_elevation_factor: >-
+        {{ 1 - (var_sun_elevation_ratio | float(0)) }}
+      var_sun_elevation_offset_minutes: >-
+        {{ (in_ji_extra_sun_elevation_time | float(0)) * (var_sun_elevation_factor | float(0)) }}
+      var_total_adjustment_seconds: >-
+        {{ ((var_ldr_offset_minutes | float(0)) + (var_sun_elevation_offset_minutes | float(0))) * 60 }}
 
   - alias: Apply the custom adjustments to the sunrise and sunset times
     variables:
-      sunrise_final_ts: >-
-        {{ (morning_base_ts | float(0)) + (total_adjustment_seconds | float(0)) }}
-      sunset_candidate_ts: >-
-        {{ (night_base_ts | float(0)) - (total_adjustment_seconds | float(0)) }}
+      var_final_sunrise_timestamp: >-
+        {{ (var_base_sunrise_timestamp | float(0)) + (var_total_adjustment_seconds | float(0)) }}
+      var_candidate_sunset_timestamp: >-
+        {{ (var_base_sunset_timestamp | float(0)) - (var_total_adjustment_seconds | float(0)) }}
 
   - alias: Format the calculated boundaries as local time-only helper values
     variables:
-      sunrise_final_time: >-
-        {{ (sunrise_final_ts | float(0)) | timestamp_custom('%H:%M:%S', true) }}
-      sunset_candidate_time: >-
-        {{ (sunset_candidate_ts | float(0)) | timestamp_custom('%H:%M:%S', true) }}
-      sunset_final_time: >-
-        {{ (sunset_candidate_ts | float(0)) | timestamp_custom('%H:%M:%S', true) }}
+      var_final_sunrise_time: >-
+        {{ (var_final_sunrise_timestamp | float(0)) | timestamp_custom('%H:%M:%S', true) }}
+      var_candidate_sunset_time: >-
+        {{ (var_candidate_sunset_timestamp | float(0)) | timestamp_custom('%H:%M:%S', true) }}
+      var_final_sunset_time: >-
+        {{ (var_candidate_sunset_timestamp | float(0)) | timestamp_custom('%H:%M:%S', true) }}
 
   - alias: Validate sunset follows sunrise and enforce the 10-minute minimum
     if:
       - alias: Calculated sunset time is at or before sunrise time
         condition: template
         value_template: >-
-          {% set sunset_parts = sunset_candidate_time.split(':') %}
-          {% set sunrise_parts = sunrise_final_time.split(':') %}
-          {% set sunset_seconds = (sunset_parts[0] | int * 3600) + (sunset_parts[1] | int * 60) + (sunset_parts[2] | int) %}
-          {% set sunrise_seconds = (sunrise_parts[0] | int * 3600) + (sunrise_parts[1] | int * 60) + (sunrise_parts[2] | int) %}
-          {{ sunset_seconds <= sunrise_seconds }}
+          {% set internal_sunset_time_parts = var_candidate_sunset_time.split(':') %}
+          {% set internal_sunrise_time_parts = var_final_sunrise_time.split(':') %}
+          {% set internal_sunset_time_seconds = (internal_sunset_time_parts[0] | int * 3600) + (internal_sunset_time_parts[1] | int * 60) + (internal_sunset_time_parts[2] | int) %}
+          {% set internal_sunrise_time_seconds = (internal_sunrise_time_parts[0] | int * 3600) + (internal_sunrise_time_parts[1] | int * 60) + (internal_sunrise_time_parts[2] | int) %}
+          {{ internal_sunset_time_seconds <= internal_sunrise_time_seconds }}
     then:
       - alias: Force sunset to 10 minutes after sunrise
         variables:
-          sunset_final_time: >-
-            {{ ((sunrise_final_ts | float(0)) + 600) | timestamp_custom('%H:%M:%S', true) }}
+          var_final_sunset_time: >-
+            {{ ((var_final_sunrise_timestamp | float(0)) + 600) | timestamp_custom('%H:%M:%S', true) }}
 
   - alias: Set the sunrise helper to its adjusted custom darkness boundary
     action: input_datetime.set_datetime
     target:
       entity_id: !input in_time_morning
     data:
-      time: '{{ sunrise_final_time }}'
+      time: '{{ var_final_sunrise_time }}'
 
   - alias: Set the sunset helper after validating its order
     action: input_datetime.set_datetime
     target:
       entity_id: !input in_time_night
     data:
-      time: '{{ sunset_final_time }}'
+      time: '{{ var_final_sunset_time }}'
 
 #---------------
 # mode

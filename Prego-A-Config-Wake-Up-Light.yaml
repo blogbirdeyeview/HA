@@ -1,6 +1,6 @@
 # 2026-02-14
 blueprint:
-  name: Prego - Config Wake up to configurable actions at next alarm v2.18
+  name: Prego - Config Wake up to configurable actions at next alarm v2.22
   description: >-
     Runs configurable actions before your next alarm.
     The blueprint listens to an alarm timestamp (from the Home Assistant mobile app) and writes an offset time
@@ -50,7 +50,7 @@ blueprint:
     #*** Filters
     in_away_from_home:
       name: Away from home
-      description: Optional indicator that means nobody is currently home (travel).
+      description: Optional helper that indicates when nobody is home.
       default: ''
       selector:
         entity:
@@ -58,7 +58,7 @@ blueprint:
 
     in_stealth_mode:
       name: Stealth mode
-      description: Optional indicator(s) used to block automatic turn-on, for example when people are sleeping or you want to avoid visible activity.
+      description: Optional helpers that block automatic activation while any of them is on.
       default: []
       selector:
         entity:
@@ -67,15 +67,15 @@ blueprint:
 
     # Motion/light activation quiet window
     in_quiet_window_start:
-      name: Quiet window start (23:00:00)
-      description: When the quiet window starts. While it is active, motion does not turn on the targets.
+      name: Quiet hours start
+      description: Start time for quiet hours, when automatic activation is blocked.
       default: '23:00:00'
       selector:
         time: {}
 
     in_quiet_window_end:
-      name: Quiet window end (07:00:00)
-      description: When the quiet window ends. Motion can turn on the targets again after this time.
+      name: Quiet hours end
+      description: End time for quiet hours, when automatic activation can resume.
       default: '07:00:00'
       selector:
         time: {}
@@ -92,25 +92,23 @@ blueprint:
 # Variables
 #---------------
 
-trigger_variables:
-  var_offset: !input in_offset
-  var_away_from_home: !input in_away_from_home
-  var_stealth_mode: !input in_stealth_mode
-
 variables:
+  in_ji_offset: !input in_offset
+  in_ji_away_from_home: !input in_away_from_home
+  in_ji_stealth_mode: !input in_stealth_mode
   var_bol_away_from_home: >
-    {% if not var_away_from_home %}
+    {% if not in_ji_away_from_home %}
       {{ false }}
     {% else %}
-      {{ is_state(var_away_from_home, 'on') | bool }}
+      {{ is_state(in_ji_away_from_home, 'on') | bool }}
     {% endif %}
   #--- Block-var
   var_bol_stealth_mode: >
-    {% if not var_stealth_mode or (var_stealth_mode | length == 0) %}
+    {% if not in_ji_stealth_mode or (in_ji_stealth_mode | length == 0) %}
       {{ false }}
     {% else %}
     {{
-      (expand(var_stealth_mode)
+      (expand(in_ji_stealth_mode)
       | selectattr('state', 'eq', 'on')
       | list
       | count > 0)
@@ -120,10 +118,12 @@ variables:
 
 trigger:
   - platform: time
+    alias: Scheduled wake-up time reached
     at: !input in_alarm_helper
     id: wake_up
 
   - platform: state
+    alias: Next alarm changed
     entity_id:
       - !input in_alarm_source
     id: helper_update
@@ -143,17 +143,17 @@ action:
             id: helper_update
           - condition: template
             value_template: >
-              {% set new_state = trigger.to_state.state %}
-              {{ new_state is not none and new_state not in ["unknown", "unavailable"] }}
+              {% set internal_alarm_state = trigger.to_state.state %}
+              {{ internal_alarm_state is not none and internal_alarm_state not in ["unknown", "unavailable"] }}
         sequence:
           - variables:
-              var_alarm_offset_ts: >
-                {{ (as_timestamp(trigger.to_state.state) | int(0)) - ((var_offset | int(0)) * 60) }}
+              var_alarm_offset_timestamp: >
+                {{ (as_timestamp(trigger.to_state.state) | int(0)) - ((in_ji_offset | int(0)) * 60) }}
 
           - service: input_datetime.set_datetime
             data:
               timestamp: >
-                {{ var_alarm_offset_ts | int(0) }}
+                {{ var_alarm_offset_timestamp | int(0) }}
             target:
               entity_id: !input in_alarm_helper
 
@@ -175,10 +175,10 @@ action:
             value_template: '{{ not var_bol_stealth_mode }}'
             # Stealth mode is not active (No ninjas)
 
-          - alias: 'Current time is not inside the quiet window'
+          - alias: 'Current time is outside quiet hours'
             condition: not
             conditions:
-              - alias: 'Current time is inside the quiet window'
+              - alias: 'Current time is within quiet hours'
                 condition: time
                 after: !input 'in_quiet_window_start'
                 before: !input 'in_quiet_window_end'

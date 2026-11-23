@@ -1,5 +1,5 @@
 blueprint:
-  name: Prego Script - Dynamic Light Control  v5.36
+  name: Prego Script - Dynamic Light Control  v5.38
   description: >-
     Turns on selected switches or lights. Dimmable lights receive dynamic
     brightness when it applies and 100% brightness otherwise. Switches are
@@ -16,10 +16,9 @@ blueprint:
 
 fields:
   in_target_entity_control:
-    name: Target entities
+    name: Target switches or lights
     description: >-
-      Switches or lights passed by the calling automation. All entities must
-      have the same domain.
+      Select the switches or lights to control. All targets must be the same entity type.
     required: true
     selector:
       entity:
@@ -30,7 +29,7 @@ fields:
   in_light_transition_seconds:
     name: Light turn-on transition
     description: >-
-      Time in seconds for the light to transition to the requested state.
+      Seconds for the light to reach the selected brightness. Use 0 for an immediate change.
     required: true
     selector:
       number:
@@ -40,33 +39,33 @@ fields:
         mode: slider
         unit_of_measurement: s
   in_enable_internal_dynamic_brightness:
-    name: Enable brightness control
-    description: When enabled, dynamic brightness applies inside the configured time window. Dimmable lights use 100% outside the window or when this option is disabled. Low-brightness mode can extend dynamic control outside the window.
+    name: Enable dynamic brightness
+    description: Adjust dimmable lights during the configured brightness window. Low brightness mode can extend dynamic brightness beyond that window.
     required: true
     selector:
       boolean: {}
   in_low_brightness_mode:
     name: Low brightness mode
-    description: When enabled with brightness control, apply a stronger darkness factor and bypass the configured time window.
+    description: Dims lights more and extends dynamic brightness beyond its scheduled hours when dynamic brightness is enabled.
     required: false
     default: false
     selector:
       boolean: {}
   in_clock_start_time:
-    name: Dynamic light start time
-    description: Start time for dynamic brightness.
+    name: Dynamic brightness start time
+    description: Time when the scheduled dynamic brightness period begins.
     required: true
     selector:
       time: {}
   in_clock_end_time:
-    name: Dynamic light end time
-    description: End time for dynamic brightness.
+    name: Dynamic brightness end time
+    description: Time when the scheduled dynamic brightness period ends.
     required: true
     selector:
       time: {}
   in_min_brightness_pct:
-    name: Minimum brightness
-    description: Minimum brightness percentage.
+    name: Minimum dynamic brightness
+    description: Lowest brightness percentage during dynamic brightness control.
     required: true
     selector:
       number:
@@ -76,8 +75,8 @@ fields:
         mode: slider
         unit_of_measurement: '%'
   in_max_brightness_pct:
-    name: Maximum brightness
-    description: Maximum brightness percentage.
+    name: Maximum dynamic brightness
+    description: Highest brightness percentage during dynamic brightness control.
     required: true
     selector:
       number:
@@ -87,8 +86,8 @@ fields:
         mode: slider
         unit_of_measurement: '%'
   in_brightness_curve_gamma:
-    name: Brightness curve gamma
-    description: Brightness curve exponent, from 0.1 to 5.0.
+    name: Dynamic brightness curve gamma
+    description: Higher values make the lights dim faster as it gets darker. The minimum and maximum brightness stay the same.
     required: true
     selector:
       number:
@@ -122,15 +121,15 @@ sequence:
     variables:
       var_target_entities: >-
         {{ in_target_entity_control }}
-      var_first_target_entity: >-
+      var_first_target_entity_id: >-
         {{ (var_target_entities | trim) if var_target_entities is string else (var_target_entities | default([], true) | first | default('', true)) }}
       var_target_domain: >-
-        {{ var_first_target_entity.split('.')[0] if '.' in var_first_target_entity else '' }}
+        {{ var_first_target_entity_id.split('.')[0] if '.' in var_first_target_entity_id else '' }}
       var_bol_target_domains_mixed: >-
         {% set temp_target_entities = [var_target_entities] if var_target_entities is string else (var_target_entities | default([], true)) %}
         {% set temp_target_domain_check = namespace(temp_has_mixed_domains=false) %}
-        {% for entity in temp_target_entities %}
-          {% if entity.split('.')[0] != var_target_domain %}
+        {% for temp_target_entity_id in temp_target_entities %}
+          {% if temp_target_entity_id.split('.')[0] != var_target_domain %}
             {% set temp_target_domain_check.temp_has_mixed_domains = true %}
           {% endif %}
         {% endfor %}
@@ -160,11 +159,11 @@ sequence:
   - alias: Prepare light parameters from the calling automation
     variables:
       var_light_transition_seconds: '{{ in_light_transition_seconds | int }}'
-      var_bol_enable_dynamic_brightness: '{{ in_enable_internal_dynamic_brightness }}'
+      var_bol_enable_internal_dynamic_brightness: '{{ in_enable_internal_dynamic_brightness }}'
       var_bol_low_brightness_mode: '{{ in_low_brightness_mode | default(false) | bool }}'
       var_darkness_multiplier: '{{ 3 if (in_low_brightness_mode | default(false) | bool) else 1 }}'
-      var_clock_start_time: '{{ in_clock_start_time }}'
-      var_clock_end_time: '{{ in_clock_end_time }}'
+      var_brightness_window_start_time: '{{ in_clock_start_time }}'
+      var_brightness_window_end_time: '{{ in_clock_end_time }}'
       var_min_brightness_pct: '{{ in_min_brightness_pct | float }}'
       var_max_brightness_pct: '{{ in_max_brightness_pct | float }}'
       var_brightness_curve_gamma: '{{ in_brightness_curve_gamma | float }}'
@@ -208,7 +207,7 @@ sequence:
   # determines whether all targets receive brightness data.
   - variables:
       var_supported_color_modes: >-
-        {{ state_attr(var_first_target_entity, 'supported_color_modes') | default([], true) }}
+        {{ state_attr(var_first_target_entity_id, 'supported_color_modes') | default([], true) }}
 
   - variables:
       var_bol_is_dimmable: >-
@@ -232,15 +231,15 @@ sequence:
       var_bol_inside_brightness_window: >-
         {{
           (
-            var_clock_start_time < var_clock_end_time
-            and var_current_time >= var_clock_start_time
-            and var_current_time < var_clock_end_time
+            var_brightness_window_start_time < var_brightness_window_end_time
+            and var_current_time >= var_brightness_window_start_time
+            and var_current_time < var_brightness_window_end_time
           )
           or (
-            var_clock_start_time > var_clock_end_time
+            var_brightness_window_start_time > var_brightness_window_end_time
             and (
-              var_current_time >= var_clock_start_time
-              or var_current_time < var_clock_end_time
+              var_current_time >= var_brightness_window_start_time
+              or var_current_time < var_brightness_window_end_time
             )
           )
         }}
@@ -250,7 +249,7 @@ sequence:
       var_bol_apply_dynamic_brightness: >-
         {{
           var_bol_is_dimmable
-          and var_bol_enable_dynamic_brightness
+          and var_bol_enable_internal_dynamic_brightness
           and (var_bol_low_brightness_mode or var_bol_inside_brightness_window)
         }}
       var_bol_apply_full_brightness: >-
@@ -365,8 +364,8 @@ sequence:
               level: debug
               message: >-
                 Prego dynamic light calculation: selected full-brightness path because dynamic brightness is disabled or outside its configured window;
-                brightness enabled={{ var_bol_enable_dynamic_brightness }}, dimmable={{ var_bol_is_dimmable }};
-                current={{ var_current_time }}, window={{ var_clock_start_time }}-{{ var_clock_end_time }};
+                brightness enabled={{ var_bol_enable_internal_dynamic_brightness }}, dimmable={{ var_bol_is_dimmable }};
+                current={{ var_current_time }}, window={{ var_brightness_window_start_time }}-{{ var_brightness_window_end_time }};
                 received min={{ var_min_brightness_pct }}%, max={{ var_max_brightness_pct }}%,
                 gamma={{ var_brightness_curve_gamma }}; 
                 calculated=100%.
@@ -389,8 +388,8 @@ sequence:
           level: debug
           message: >-
             Prego dynamic light calculation: selected unchanged-brightness path;
-            brightness enabled={{ var_bol_enable_dynamic_brightness }}, dimmable={{ var_bol_is_dimmable }};
-            current={{ var_current_time }}, window={{ var_clock_start_time }}-{{ var_clock_end_time }};
+            brightness enabled={{ var_bol_enable_internal_dynamic_brightness }}, dimmable={{ var_bol_is_dimmable }};
+            current={{ var_current_time }}, window={{ var_brightness_window_start_time }}-{{ var_brightness_window_end_time }};
             received min={{ var_min_brightness_pct }}%, max={{ var_max_brightness_pct }}%,
             gamma={{ var_brightness_curve_gamma }}; 
             calculated=unchanged.
