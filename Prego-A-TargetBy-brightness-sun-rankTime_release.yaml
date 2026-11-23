@@ -3,7 +3,7 @@
 
 # 2026-11-10
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.87
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.88
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -288,6 +288,7 @@ blueprint:
 #---------------
 
 trigger_variables:
+  in_low_brightness_mode: !input in_low_brightness_mode
   var_motion_sensor_keep_alive: !input in_motion_sensor_keep_alive
   var_away_from_home: !input in_away_from_home
   var_stealth_mode: !input in_stealth_mode
@@ -304,7 +305,6 @@ variables:
   in_time_night: !input in_time_night
   in_enable_quiet_window_behavior: !input in_enable_quiet_window_behavior
   in_enable_internal_dynamic_brightness: !input in_enable_internal_dynamic_brightness
-  in_low_brightness_mode: !input in_low_brightness_mode
   in_adaptive_lighting_adapt_brightness_switch: !input in_adaptive_lighting_adapt_brightness_switch
   in_clock_start_brightness: !input in_clock_start_brightness
   in_clock_end_brightness: !input in_clock_end_brightness
@@ -498,6 +498,16 @@ triggers:
     alias: Internal dynamic-brightness window ends
     at: !input in_clock_end_brightness
     id: trigger_internal_brightness_end
+
+  - trigger: template
+    alias: Low brightness mode turns on
+    value_template: "{{ in_low_brightness_mode and is_state(in_low_brightness_mode, 'on') }}"
+    id: trigger_low_brightness_mode_changed
+
+  - trigger: template
+    alias: Low brightness mode turns off
+    value_template: "{{ in_low_brightness_mode and is_state(in_low_brightness_mode, 'off') }}"
+    id: trigger_low_brightness_mode_changed
 
   - trigger: time
     alias: Daily 02:00 safety shutdown
@@ -1020,8 +1030,8 @@ actions:
           - alias: 'Turn on targets using the selected brightness method'
             action: >-
               {{ var_dynamic_brightness_script }}
-            data:
-              in_target_entity_control: !input in_target_entity_control
+            data: &brightness_script_data
+              in_target_entity_control: '{{ var_target_entities }}'
               in_enable_internal_dynamic_brightness: '{{ var_bol_enable_internal_dynamic_brightness | bool }}'
               in_clock_start_time: !input in_clock_start_brightness
               in_clock_end_time: !input in_clock_end_brightness
@@ -1030,6 +1040,28 @@ actions:
               in_brightness_curve_gamma: !input in_brightness_curve_gamma
               in_light_transition_seconds: !input in_light_transition_seconds
               in_low_brightness_mode: '{{ var_bol_low_brightness_mode | bool }}'
+
+      - alias: 'Refresh brightness on lights that are already on'
+        conditions:
+          - condition: trigger
+            id: trigger_low_brightness_mode_changed
+          - condition: template
+            value_template: '{{ var_bol_enable_internal_dynamic_brightness | bool }}'
+        sequence:
+          - repeat:
+              for_each: >-
+                {{ expand(var_target_entities)
+                   | selectattr('domain', 'eq', 'light')
+                   | selectattr('state', 'eq', 'on')
+                   | map(attribute='entity_id') | list }}
+              sequence:
+                - condition: template
+                  value_template: "{{ is_state(repeat.item, 'on') }}"
+                - variables:
+                    var_target_entities: '{{ [repeat.item] }}'
+                - alias: 'Apply the selected brightness to this light'
+                  action: '{{ var_dynamic_brightness_script }}'
+                  data: *brightness_script_data
 
       #---------------
       # Case OFF
