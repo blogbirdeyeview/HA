@@ -29,7 +29,7 @@ The local clock window includes its start and excludes its end. It can cross mid
 
 ## Brightness calculation
 
-The dynamic path reads `sensor.sun_next_noon`, converts it to local time, and uses its clock time as today's solar noon. It calculates the signed difference from the current time in hours, subtracting 24 hours above `+12` and adding 24 hours below `−12`. Low-brightness mode triples the absolute offset before applying the curve.
+The dynamic path reads `sensor.sun_next_noon`, converts it to local time, and uses its clock time as today's solar noon. If the sensor value cannot be read as a date and time, the script uses 12:00 local time and continues with the same curve. It calculates the signed difference from the current time in hours, subtracting 24 hours above `+12` and adding 24 hours below `−12`. Low-brightness mode triples the absolute offset before applying the curve.
 
 ```text
 darkness_factor = abs(hours_from_solar_noon) * darkness_multiplier
@@ -38,6 +38,7 @@ normalized = clamp(raw_pct / 100, 0, 1)
 curved = normalized ** gamma
 brightness = min_pct + curved * (max_pct - min_pct)
 brightness_pct = clamp(round(brightness), 1, 100)
+if low_mode and brightness_pct == 100: brightness_pct = 50
 ```
 
 The multiplier is `3` in low-brightness mode and `1` otherwise. Gamma `1.0` gives a linear curve. Higher gamma lowers brightness between the same endpoints, and lower gamma raises it. The script calculates one target per call. The transition sets how long the light takes to reach the requested level.

@@ -1,5 +1,5 @@
 blueprint:
-  name: Prego Script - Dynamic Light Control  v5.35
+  name: Prego Script - Dynamic Light Control  v5.36
   description: >-
     Turns on selected switches or lights. Dimmable lights receive dynamic
     brightness when it applies and 100% brightness otherwise. Switches are
@@ -204,6 +204,8 @@ sequence:
       - stop: Minimum brightness must be at least 1%, maximum must be at most 100%, and minimum must not exceed maximum.
         error: true
 
+  # TODO: Check dimming support for each light. The first light currently
+  # determines whether all targets receive brightness data.
   - variables:
       var_supported_color_modes: >-
         {{ state_attr(var_first_target_entity, 'supported_color_modes') | default([], true) }}
@@ -271,8 +273,9 @@ sequence:
           - alias: Capture the solar-noon time
             variables:
               var_solar_noon_time: >-
-                {% set temp_solar_noon_datetime = states('sensor.sun_next_noon') | as_datetime | as_local %}
-                {{ temp_solar_noon_datetime.strftime('%H:%M:%S') }}
+                {% set temp_solar_noon_datetime = states('sensor.sun_next_noon') | as_datetime(none) %}
+                {{ (temp_solar_noon_datetime | as_local).strftime('%H:%M:%S')
+                   if temp_solar_noon_datetime is not none else '12:00:00' }}
 
           - alias: Calculate the solar-noon time offset
             variables:
@@ -322,7 +325,8 @@ sequence:
           - alias: Clamp the calculated brightness percentage
             variables:
               var_calculated_brightness_pct: >-
-                {{ [1, [var_unrounded_brightness_pct | round(0) | int, 100] | min] | max }}
+                {% set temp_rounded_pct = [1, [var_unrounded_brightness_pct | round(0) | int, 100] | min] | max %}
+                {{ 50 if var_bol_low_brightness_mode and temp_rounded_pct == 100 else temp_rounded_pct }}
 
           - alias: Log received brightness parameters and calculated level
             action: system_log.write
