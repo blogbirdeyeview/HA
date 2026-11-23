@@ -1,9 +1,9 @@
 # Last release for Prego-A-TargetBy-brightness-sun-rankTime.yaml
 # IMPORTANT: depends on an instance of Prego-S-dynamic-light.yaml (default: script.prego_dynamic_light_control_v4_XX)
 
-# 2026-11-10
+# 2026-11-23
 blueprint:
-  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.88
+  name: Prego - Automatic switches/lights - By motion detection & brightness & sun - rank of time vX.89
   description: |
     Automatically controls switches and lights based on motion, sunlight, and your quiet/sleep time window.
 
@@ -752,6 +752,23 @@ actions:
               var_bol_low_brightness_mode: false
 
       #---------------
+      # Case 10 Manual - COntrol brightness --> low brightness mode changes.
+      #---------------
+      - alias: 'Manual - Request a brightness refresh when low brightness mode changes'
+        conditions:
+          - condition: trigger
+            id: trigger_low_brightness_mode_changed
+          - condition: template
+            value_template: '{{ var_bol_enable_internal_dynamic_brightness | bool }}'
+        sequence:
+          - alias: 'Check: at least one target is ON'
+            condition: template
+            value_template: '{{ var_bol_any_target_on }}'
+
+          - variables:
+              var_target_action: 'refresh_brightness'
+
+      #---------------
       # Case 99 Scheduled - To turn OFF the light when it is daytime.
       #---------------
       - alias: 'Scheduled - turn OFF the target - it is already morning!'
@@ -1043,10 +1060,8 @@ actions:
 
       - alias: 'Refresh brightness on lights that are already on'
         conditions:
-          - condition: trigger
-            id: trigger_low_brightness_mode_changed
           - condition: template
-            value_template: '{{ var_bol_enable_internal_dynamic_brightness | bool }}'
+            value_template: "{{ var_target_action == 'refresh_brightness' }}"
         sequence:
           - repeat:
               for_each: >-
