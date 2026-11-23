@@ -16,6 +16,12 @@ Blueprint inputs use established `in_` keys. When a template needs an input, exp
 - Give each scope its own binding when both trigger and execution templates need the same input. Use consistent names for equivalent values and remove unused variables.
 - Use `temp_` for Jinja locals declared inside the value of a `variables:` definition and `internal_` for locals declared in other templates. Apply the same prefix to namespace objects, their attributes, and all reassignments.
 
+## Home Assistant compatibility
+
+Use the latest stable Home Assistant release as the reference for blueprint design. Adopt newer native features when they improve behavior, readability, or maintenance. Aim for up to five months of backward compatibility when practical, and use a valuable new feature sooner when it requires a more recent release. [Home Assistant release notes](https://www.home-assistant.io/blog/categories/release-notes/)
+
+Set `homeassistant.min_version` to the earliest release that supports the features the blueprint uses. Raise it when adopting syntax, selectors, or building blocks that need a newer release. [Blueprint schema](https://www.home-assistant.io/docs/blueprint/schema/)
+
 ## Blueprint versions
 
 For each script or automation YAML you edit, increment `YY` in the `vX.YY` suffix of `blueprint.name` by one as part of the change. Keep `X` as written and zero-pad `YY` to two digits. For example, change `v5.35` to `v5.36` or `vX.87` to `vX.88` in a release file.

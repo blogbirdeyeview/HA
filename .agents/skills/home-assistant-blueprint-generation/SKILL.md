@@ -10,13 +10,15 @@ description: Maintain or review the Prego Home Assistant automation and script b
 - Start with the [repository guide](../../../docs/repository-guide.md) and read the current YAML for the requested flow. For brightness work, check the script and its automation callers together. Use the guide to find the main and release files.
 - Apply focused edits in place. Preserve the original date headers, comments, separators, and layout, including existing comments in other languages. Keep trigger IDs stable for existing instances.
 - Use the [input consistency skill](../home-assistant-input-consistency/SKILL.md) when adding or editing inputs, script fields, or their shared constants.
-- Match the file's Home Assistant syntax and check its `homeassistant.min_version` when using a newer feature. Use the official documentation linked in the repository guide for version-sensitive behavior.
+- Consult official Home Assistant documentation and release notes when designing, modernizing, or investigating ambiguous blueprint behavior. Verify the syntax and the release that introduced each feature you adopt. Follow the [repository compatibility policy](../../../AGENTS.md#home-assistant-compatibility) when setting `homeassistant.min_version`.
+- Check how the flow behaves after a restart and when a needed entity is unavailable or an action fails. Where recovery is needed, base it on current state, as the motion blueprint does by checking for motion before running SafeOff.
 
 ## Style
 
 - Use US English for new YAML text, including aliases, descriptions, and comments. Keep user-facing descriptions short and describe what the blueprint does in everyday language.
 - Keep selectors narrow and use compatible defaults for optional inputs.
-- Add concise, action-oriented aliases to triggers, branches, conditions, and actions where they help identify the path in a Home Assistant trace. Keep simple flows sequential and use `if` or `choose` to match the decision.
+- Give triggers, actions, conditions, and branches short, action-oriented aliases by default so traces show the path taken. Examples include `Run SafeOff after restart` and `Turn off targets after Home Assistant restart`. Simple steps and steps inside generated blocks can keep their default labels.
+- Use `if` for a single decision and `choose` for alternative paths. Keep actions sequential unless the flow benefits from running them in parallel and the steps can safely run independently.
 
 ## Variables strategy
 

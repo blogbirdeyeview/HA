@@ -28,7 +28,33 @@ See the script reference for required fields, brightness paths, the solar-noon f
 
 ## Variable scopes
 
-Direct `!input` bindings for Jinja include `_ji_` in their names. The keep-alive trigger reads `trigger_var_ji_motion_sensor_keep_alive`, and the execution template reads `in_ji_motion_sensor_keep_alive`. Both bindings refer to `!input in_motion_sensor_keep_alive`. The derived boolean `var_bol_motion_sensor_keep_alive` holds the sensor's motion state. [Repository variable policy](../AGENTS.md#blueprint-variables) · [Variable design workflow](../.agents/skills/home-assistant-blueprint-generation/SKILL.md#variables-strategy)
+The keep-alive input is selected once and bound in both scopes. The trigger reads `trigger_var_ji_motion_sensor_keep_alive`, and the execution template uses `in_ji_motion_sensor_keep_alive` to derive `var_bol_motion_sensor_keep_alive`. The boolean is false when the optional sensor is unset. [Motion blueprint](../Prego-A-TargetBy-1movement.yaml)
+
+```yaml
+blueprint:
+  input:
+    in_motion_sensor_keep_alive:
+      name: Keep-alive motion sensor
+      description: Optional sensor that delays shutoff while it detects motion.
+      default: ''
+      selector:
+        entity:
+          domain: binary_sensor
+
+trigger_variables:
+  trigger_var_ji_motion_sensor_keep_alive: !input in_motion_sensor_keep_alive
+
+variables:
+  in_ji_motion_sensor_keep_alive: !input in_motion_sensor_keep_alive
+  var_bol_motion_sensor_keep_alive: >
+    {% if not in_ji_motion_sensor_keep_alive %}
+      {{ false }}
+    {% else %}
+      {{ is_state(in_ji_motion_sensor_keep_alive, 'on') | bool }}
+    {% endif %}
+```
+
+See the [repository variable policy](../AGENTS.md#blueprint-variables) and the [variable design workflow](../.agents/skills/home-assistant-blueprint-generation/SKILL.md#variables-strategy).
 
 ## Local verification
 
